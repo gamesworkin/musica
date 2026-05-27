@@ -23,7 +23,7 @@ let ytPlayer = null;
 let lastYtSearchResults = []; 
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS
+// 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS E LOGOUT
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
@@ -37,7 +37,7 @@ function checkSession() {
             return;
         }
     }
-    localStorage.removeItem('streamhub_session');
+    handleLogoutActions();
 }
 
 document.getElementById('login-user').addEventListener('keypress', (e) => {
@@ -47,6 +47,7 @@ document.getElementById('login-pass').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleLogin();
 });
 document.getElementById('btn-login').addEventListener('click', handleLogin);
+document.getElementById('btn-logout').addEventListener('click', handleLogoutActions);
 
 function handleLogin() {
     const inputUser = document.getElementById('login-user').value;
@@ -61,6 +62,15 @@ function handleLogin() {
     } else {
         alert("Usuário ou senha incorretos!");
     }
+}
+
+function handleLogoutActions() {
+    localStorage.removeItem('streamhub_session');
+    if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e){} }
+    document.getElementById('app-container').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-user').value = '';
+    document.getElementById('login-pass').value = '';
 }
 
 function initApp() {
@@ -204,7 +214,7 @@ function renderSidebar() {
 }
 
 // ==========================================
-// 4. PESQUISA GLOBAL YOUTUBE (V3)
+// 4. PESQUISA GLOBAL YOUTUBE (CORRIGIDA)
 // ==========================================
 async function searchYouTubeGlobal(query) {
     if(!query.trim()) return;
@@ -220,11 +230,19 @@ async function searchYouTubeGlobal(query) {
     renderMosaic();
     document.getElementById('mosaic-grid').innerHTML = '<h3>Buscando no YouTube...</h3>';
 
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(query)}&type=video,playlist&videoCategoryId=10&key=${CONFIG.YT_API_KEY}`;
+    /* CORREÇÃO DO ERRO DA API KEY: Removido 'videoCategoryId=10' para permitir busca multi-tipo (video,playlist) sem quebras */
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=${encodeURIComponent(query)}&type=video,playlist&key=${CONFIG.YT_API_KEY}`;
     
     try {
         const response = await fetch(url);
         const data = await response.json();
+        
+        if (data.error) {
+            console.error("Erro reportado pela API do YT: ", data.error);
+            document.getElementById('mosaic-grid').innerHTML = `<h3>Erro na API: ${data.error.message}</h3>`;
+            return;
+        }
+
         lastYtSearchResults = [];
         if(data.items) {
             data.items.forEach(item => {
@@ -346,7 +364,6 @@ function renderCrudManager() {
     }
 
     Object.keys(database).forEach(cat => {
-        // Renderiza Linha Categoria
         listContainer.appendChild(createCrudRow(cat, 'category', () => {
             let novo = prompt("Novo nome da Categoria:", cat);
             if(novo && novo.trim() !== "" && novo !== cat) { 
@@ -361,7 +378,6 @@ function renderCrudManager() {
             }
         }, () => downloadJSON(database[cat], cat)));
 
-        // Varre e renderiza as subcategorias
         if (database[cat]) {
             Object.keys(database[cat]).forEach(sub => {
                 listContainer.appendChild(createCrudRow(sub, 'subcategory', () => {
@@ -378,7 +394,6 @@ function renderCrudManager() {
                     }
                 }, () => downloadJSON(database[cat][sub], sub)));
 
-                // Varre e renderiza as músicas individuais
                 if (database[cat][sub]) {
                     database[cat][sub].forEach((track, idx) => {
                         listContainer.appendChild(createCrudRow(track.title, 'track', () => {
@@ -410,7 +425,6 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
             <button class="crud-btn btn-exp" title="Exportar Bloco"><i class="fas fa-download"></i></button>
         </div>`;
         
-    // Atribuição explícita de gatilhos operacionais de clique
     row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
     row.querySelector('.btn-del').onclick = (e) => { e.stopPropagation(); onDel(); };
     row.querySelector('.btn-exp').onclick = (e) => { e.stopPropagation(); onExp(); };
@@ -418,13 +432,11 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 function saveState() {
-    // Sincroniza via PUT com o Firebase Realtime Database
     fetch(CONFIG.FIREBASE_URL, { 
         method: 'PUT', 
         body: JSON.stringify(database) 
     })
     .then(() => {
-        // Redesenha as listas na interface imediatamente após receber a confirmação
         renderSidebar(); 
         renderMosaic(); 
         renderCrudManager();
@@ -513,7 +525,7 @@ function setupEventListeners() {
     document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
     document.getElementById('btn-open-admin').addEventListener('click', () => {
         document.getElementById('admin-modal').classList.remove('hidden');
-        renderCrudManager(); // Força renderização ao abrir a janela modal
+        renderCrudManager(); 
     });
     
     document.getElementById('btn-close-admin').addEventListener('click', closeAllModals);
@@ -526,7 +538,6 @@ function setupEventListeners() {
         document.getElementById('player-container').classList.add('hidden');
     });
 
-    // Evento de alternância visual das abas do painel
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -536,7 +547,5 @@ function setupEventListeners() {
         });
     });
 }
-
-function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 window.onload = checkSession;
