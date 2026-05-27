@@ -147,10 +147,11 @@ function renderMosaic() {
         lastYtSearchResults.forEach(item => {
             const isPlaylist = item.type === 'playlist';
             const card = createCard(item.title, item.thumb, true, isPlaylist, null);
-            card.querySelector('.add-music-badge').addEventListener('click', (e) => {
+            card.querySelector('.add-music-badge').onclick = (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 openAdminWithTrack(item);
-            });
+            };
             grid.appendChild(card);
         });
     }
@@ -289,7 +290,9 @@ async function fetchPlaylistItems(playlistId) {
     }
 }
 
-async function fetchManualLinkData() {
+async function fetchManualLinkData(e) {
+    if(e) { e.preventDefault(); e.stopPropagation(); } // BLINDAGEM CONTRA CONCORRÊNCIA
+    
     const url = document.getElementById('manual-media-url').value.trim();
     if(!url) return alert("Cole uma URL válida do YouTube.");
 
@@ -410,7 +413,7 @@ function onPlayerStateChange(event) {
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD & BACKUPS (JSON)
+// 6. COMPONENTE CRUD
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
@@ -489,7 +492,6 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
     return row;
 }
 
-// ADICIONADO: Função que lê o arquivo local selecionado pelo usuário e faz o upload/mesclagem no Firebase
 function handleJSONImport(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -498,20 +500,17 @@ function handleJSONImport(event) {
     reader.onload = function(e) {
         try {
             const importedData = JSON.parse(e.target.result);
-            
             if (typeof importedData === 'object' && importedData !== null && !Array.isArray(importedData)) {
-                if (confirm("Deseja mesclar este JSON com suas mídias atuais? (Dados de categorias idênticas serão atualizados).")) {
-                    // Mescla as chaves no banco local de forma estruturada
+                if (confirm("Deseja mesclar este JSON com suas mídias atuais?")) {
                     database = Object.assign({}, database, importedData);
                     saveState();
                     alert("Backup em lote importado e gravado com sucesso no Firebase!");
                 }
             } else {
-                alert("Estrutura de arquivo JSON inválida. Certifique-se de que exportou o arquivo a partir deste sistema.");
+                alert("Estrutura de arquivo JSON inválida.");
             }
         } catch (err) {
-            alert("Erro ao ler o arquivo JSON. O arquivo pode estar corrompido ou mal formatado.");
-            console.error(err);
+            alert("Erro ao ler o arquivo JSON.");
         }
     };
     reader.readAsText(file);
@@ -545,7 +544,9 @@ function downloadJSON(obj, filename) {
     a.remove();
 }
 
-async function saveMediaToDatabase() {
+async function saveMediaToDatabase(e) {
+    if(e) { e.preventDefault(); e.stopPropagation(); } // BLINDAGEM ABSOLUTA CONTRA SUBMIT EVENT TRAVAMENTOS
+
     const cat = document.getElementById('media-category').value.trim();
     const sub = document.getElementById('media-subcategory').value.trim();
     const title = document.getElementById('prev-title').value;
@@ -608,7 +609,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS
+// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -619,6 +620,7 @@ function setupEventListeners() {
         filterInternalDatabase(e.target.value);
     });
 
+    // Vinculação com interceptador de travamento
     document.getElementById('btn-fetch-manual').addEventListener('click', fetchManualLinkData);
 
     document.getElementById('toggle-sidebar').addEventListener('click', () => {
@@ -629,20 +631,31 @@ function setupEventListeners() {
     
     document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
     
-    document.getElementById('btn-open-admin').addEventListener('click', () => {
+    document.getElementById('btn-open-admin').onclick = (e) => {
+        e.preventDefault();
         document.getElementById('admin-modal').classList.remove('hidden');
         switchTabs('add-tab', 'tab-trigger-add');
         renderCrudManager(); 
-    });
+    };
     
-    document.getElementById('btn-close-admin').addEventListener('click', closeAllModals);
+    document.getElementById('btn-close-admin').onclick = (e) => {
+        e.preventDefault();
+        closeAllModals();
+    };
+
+    // Vinculação com interceptador de travamento
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
-    document.getElementById('btn-export-json').addEventListener('click', () => downloadJSON(database, 'banco_completo'));
     
-    // ADICIONADO: Gatilhos para disparar a janela de arquivos e capturar a alteração do input
-    document.getElementById('btn-trigger-import').addEventListener('click', () => {
+    document.getElementById('btn-export-json').onclick = (e) => {
+        e.preventDefault();
+        downloadJSON(database, 'banco_completo');
+    };
+    
+    document.getElementById('btn-trigger-import').onclick = (e) => {
+        e.preventDefault();
         document.getElementById('import-json-file').click();
-    });
+    };
+    
     document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
 
     document.getElementById('tab-trigger-manage').onclick = (e) => {
@@ -656,10 +669,13 @@ function setupEventListeners() {
         switchTabs('add-tab', 'tab-trigger-add');
     };
     
-    document.getElementById('btn-close-player').addEventListener('click', () => {
+    document.getElementById('btn-close-player').onclick = (e) => {
+        e.preventDefault();
         if(ytPlayer) ytPlayer.stopVideo();
         document.getElementById('player-container').classList.add('hidden');
-    });
+    };
 }
+
+function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 window.onload = checkSession;
