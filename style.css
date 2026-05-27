@@ -148,7 +148,7 @@ button:hover { background: var(--accent-hover); }
 .breadcrumb { font-size: 0.9rem; color: var(--text-muted); }
 .clickable { cursor: pointer; color: var(--text-main); }
 
-/* Responsividade Mobile (BLINDADA CONTRA SOBREPOSIÇÃO) */
+/* Responsividade Mobile */
 @media (max-width: 768px) {
     .logo { display: none; }
     
@@ -157,16 +157,17 @@ button:hover { background: var(--accent-hover); }
         left: 0; 
         top: 60px; 
         bottom: 0; 
-        z-index: 99999 !important; /* Força ficar acima de qualquer card ou mosaico */
+        z-index: 99999 !important; 
         transform: translateX(-100%); 
         width: 260px !important; 
         padding: 1.5rem !important; 
         border-right: 1px solid var(--border);
         background: var(--bg-sidebar) !important;
         display: block !important;
-        transition: transform 0.3s ease-in-out !important;
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     
+    /* Chaveamento preciso via CSS puro controlado por classe única */
     .sidebar.open { 
         transform: translateX(0) !important; 
     }
