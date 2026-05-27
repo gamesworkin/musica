@@ -148,12 +148,34 @@ button:hover { background: var(--accent-hover); }
 .breadcrumb { font-size: 0.9rem; color: var(--text-muted); }
 .clickable { cursor: pointer; color: var(--text-main); }
 
-/* Responsividade Mobile */
+/* Responsividade Mobile (CORRIGIDO) */
 @media (max-width: 768px) {
     .logo { display: none; }
-    .sidebar { position: absolute; left: 0; top: 60px; bottom: 0; z-index: 99; transform: translateX(-100%); width: 260px !important; padding: 1.5rem !important; }
-    .sidebar.open { transform: translateX(0); }
-    .sidebar.collapsed { transform: translateX(-100%); }
+    
+    /* Configuração padrão oculta por deslizamento lateral */
+    .sidebar { 
+        position: fixed; 
+        left: 0; 
+        top: 60px; 
+        bottom: 0; 
+        z-index: 999; 
+        transform: translateX(-100%); 
+        width: 260px !important; 
+        padding: 1.5rem !important; 
+        border-right: 1px solid var(--border);
+    }
+    
+    /* CORREÇÃO CRÍTICA: Especificidade absoluta para sobrepor o translateX anterior e forçar abertura */
+    .sidebar.open { 
+        transform: translateX(0) !important; 
+        display: block !important;
+        overflow-y: auto !important;
+    }
+    
+    .sidebar.collapsed { 
+        transform: translateX(-100%) !important; 
+    }
+    
     .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
     .backup-actions { flex-direction: column; gap: 0; }
 }
