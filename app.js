@@ -410,7 +410,7 @@ function onPlayerStateChange(event) {
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD (RESOLVIDO)
+// 6. COMPONENTE CRUD & BACKUPS (JSON)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
@@ -487,6 +487,34 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
     row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onDel(); };
     row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onExp(); };
     return row;
+}
+
+// ADICIONADO: Função que lê o arquivo local selecionado pelo usuário e faz o upload/mesclagem no Firebase
+function handleJSONImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            
+            if (typeof importedData === 'object' && importedData !== null && !Array.isArray(importedData)) {
+                if (confirm("Deseja mesclar este JSON com suas mídias atuais? (Dados de categorias idênticas serão atualizados).")) {
+                    // Mescla as chaves no banco local de forma estruturada
+                    database = Object.assign({}, database, importedData);
+                    saveState();
+                    alert("Backup em lote importado e gravado com sucesso no Firebase!");
+                }
+            } else {
+                alert("Estrutura de arquivo JSON inválida. Certifique-se de que exportou o arquivo a partir deste sistema.");
+            }
+        } catch (err) {
+            alert("Erro ao ler o arquivo JSON. O arquivo pode estar corrompido ou mal formatado.");
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
 }
 
 function saveState() {
@@ -571,7 +599,6 @@ async function saveMediaToDatabase() {
     renderMosaic();
 }
 
-// CORREÇÃO CRÍTICA DE CHAVEAMENTO DE ABAS UNIFICADO (EVITA CONCORRÊNCIA E TRAVAMENTO)
 function switchTabs(targetTabId, activeTriggerBtnId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -581,7 +608,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
+// CONFIGURAÇÃO DOS GATILHOS
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -612,7 +639,12 @@ function setupEventListeners() {
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
     document.getElementById('btn-export-json').addEventListener('click', () => downloadJSON(database, 'banco_completo'));
     
-    // CORREÇÃO: Removido o loop repetitivo por classe (.tab-btn) que causava duplo escopo e travamento
+    // ADICIONADO: Gatilhos para disparar a janela de arquivos e capturar a alteração do input
+    document.getElementById('btn-trigger-import').addEventListener('click', () => {
+        document.getElementById('import-json-file').click();
+    });
+    document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
+
     document.getElementById('tab-trigger-manage').onclick = (e) => {
         e.preventDefault();
         switchTabs('manage-tab', 'tab-trigger-manage');
@@ -629,7 +661,5 @@ function setupEventListeners() {
         document.getElementById('player-container').classList.add('hidden');
     });
 }
-
-function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 window.onload = checkSession;
