@@ -23,7 +23,7 @@ let ytPlayer = null;
 let lastYtSearchResults = []; 
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS E ENTER
+// 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
@@ -88,7 +88,7 @@ function renderMosaic() {
 
     if (currentView === 'categories') {
         Object.keys(database).forEach(cat => {
-            if (Object.keys(database[cat]).length === 0) return;
+            if (!database[cat] || Object.keys(database[cat]).length === 0) return;
             const firstSub = Object.keys(database[cat])[0];
             const firstTrack = database[cat][firstSub] ? database[cat][firstSub][0] : null;
             const thumb = firstTrack ? firstTrack.thumb : 'https://placehold.co/300x200?text=Vazio';
@@ -204,12 +204,11 @@ function renderSidebar() {
 }
 
 // ==========================================
-// 4. PESQUISA GLOBAL YOUTUBE (V3) - TRAZ VÍDEOS E PLAYLISTS
+// 4. PESQUISA GLOBAL YOUTUBE (V3)
 // ==========================================
 async function searchYouTubeGlobal(query) {
     if(!query.trim()) return;
     
-    // Se for um link direto colado contendo list=, processa direto
     if(query.includes('list=')) {
         const urlParams = new URLSearchParams(new URL(query).search);
         const playlistId = urlParams.get('list');
@@ -221,7 +220,6 @@ async function searchYouTubeGlobal(query) {
     renderMosaic();
     document.getElementById('mosaic-grid').innerHTML = '<h3>Buscando no YouTube...</h3>';
 
-    // MODIFICADO: Chamada à API agora busca tanto tipo "video" quanto "playlist"
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(query)}&type=video,playlist&videoCategoryId=10&key=${CONFIG.YT_API_KEY}`;
     
     try {
@@ -279,7 +277,7 @@ function openAdminWithTrack(item) {
     document.getElementById('prev-title').value = item.title;
     document.getElementById('prev-title').dataset.videoid = item.youtubeId;
     document.getElementById('prev-title').dataset.channel = item.channel;
-    document.getElementById('prev-title').dataset.mediatype = item.type; // Grava se é playlist ou single
+    document.getElementById('prev-title').dataset.mediatype = item.type; 
     document.getElementById('media-category').focus();
 }
 
@@ -304,7 +302,7 @@ function filterInternalDatabase(query) {
 }
 
 // ==========================================
-// 5. PLAYER REPRODUÇÃO AUTOMÁTICA CONTINUA
+// 5. PLAYER DE VÍDEO & CONTROLE DE FILA
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return;
@@ -336,37 +334,69 @@ function onPlayerStateChange(event) {
 }
 
 // ==========================================
-// 6. GERENCIAMENTO CRUD EM ÁRVORE (EDITAR/EXCLUIR/EXPORTAR)
+// 6. SOLUÇÃO DO COMPONENTE CRUD (CORRIGIDO)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
     listContainer.innerHTML = '';
 
+    if (Object.keys(database).length === 0) {
+        listContainer.innerHTML = '<p style="color: #666; padding: 1rem;">Seu banco de dados está vazio.</p>';
+        return;
+    }
+
     Object.keys(database).forEach(cat => {
+        // Renderiza Linha Categoria
         listContainer.appendChild(createCrudRow(cat, 'category', () => {
             let novo = prompt("Novo nome da Categoria:", cat);
-            if(novo && novo !== cat) { database[novo] = database[cat]; delete database[cat]; saveState(); }
+            if(novo && novo.trim() !== "" && novo !== cat) { 
+                database[novo.trim()] = database[cat]; 
+                delete database[cat]; 
+                saveState(); 
+            }
         }, () => {
-            if(confirm(`Excluir categoria "${cat}" inteira?`)) { delete database[cat]; saveState(); }
+            if(confirm(`Excluir categoria "${cat}" e tudo o que há dentro dela?`)) { 
+                delete database[cat]; 
+                saveState(); 
+            }
         }, () => downloadJSON(database[cat], cat)));
 
-        Object.keys(database[cat]).forEach(sub => {
-            listContainer.appendChild(createCrudRow(sub, 'subcategory', () => {
-                let novo = prompt("Novo nome da Subcategoria:", sub);
-                if(novo && novo !== sub) { database[cat][novo] = database[cat][sub]; delete database[cat][sub]; saveState(); }
-            }, () => {
-                if(confirm(`Excluir subcategoria "${sub}" inteira?`)) { delete database[cat][sub]; saveState(); }
-            }, () => downloadJSON(database[cat][sub], sub)));
-
-            database[cat][sub].forEach((track, idx) => {
-                listContainer.appendChild(createCrudRow(track.title, 'track', () => {
-                    let novo = prompt("Novo título da Música:", track.title);
-                    if(novo) { database[cat][sub][idx].title = novo; saveState(); }
+        // Varre e renderiza as subcategorias
+        if (database[cat]) {
+            Object.keys(database[cat]).forEach(sub => {
+                listContainer.appendChild(createCrudRow(sub, 'subcategory', () => {
+                    let novo = prompt("Novo nome da Subcategoria:", sub);
+                    if(novo && novo.trim() !== "" && novo !== sub) { 
+                        database[cat][novo.trim()] = database[cat][sub]; 
+                        delete database[cat][sub]; 
+                        saveState(); 
+                    }
                 }, () => {
-                    if(confirm(`Excluir música "${track.title}"?`)) { database[cat][sub].splice(idx, 1); saveState(); }
-                }, () => downloadJSON(track, track.title)));
+                    if(confirm(`Excluir subcategoria "${sub}" inteira?`)) { 
+                        delete database[cat][sub]; 
+                        saveState(); 
+                    }
+                }, () => downloadJSON(database[cat][sub], sub)));
+
+                // Varre e renderiza as músicas individuais
+                if (database[cat][sub]) {
+                    database[cat][sub].forEach((track, idx) => {
+                        listContainer.appendChild(createCrudRow(track.title, 'track', () => {
+                            let novo = prompt("Novo título da Música:", track.title);
+                            if(novo && novo.trim() !== "") { 
+                                database[cat][sub][idx].title = novo.trim(); 
+                                saveState(); 
+                            }
+                        }, () => {
+                            if(confirm(`Excluir música "${track.title}"?`)) { 
+                                database[cat][sub].splice(idx, 1); 
+                                saveState(); 
+                            }
+                        }, () => downloadJSON(track, track.title)));
+                    });
+                }
             });
-        });
+        }
     });
 }
 
@@ -375,19 +405,35 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
     row.className = `crud-item ${type === 'subcategory' ? 'sub-level' : type === 'track' ? 'track-level' : ''}`;
     row.innerHTML = `<span><strong>[${type.toUpperCase()}]</strong> ${title}</span>
         <div class="crud-actions">
-            <button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>
-            <button class="crud-btn btn-del"><i class="fas fa-trash"></i></button>
-            <button class="crud-btn btn-exp"><i class="fas fa-download"></i></button>
+            <button class="crud-btn btn-edit" title="Editar"><i class="fas fa-edit"></i></button>
+            <button class="crud-btn btn-del" title="Excluir"><i class="fas fa-trash"></i></button>
+            <button class="crud-btn btn-exp" title="Exportar Bloco"><i class="fas fa-download"></i></button>
         </div>`;
-    row.querySelector('.btn-edit').addEventListener('click', onEdit);
-    row.querySelector('.btn-del').addEventListener('click', onDel);
-    row.querySelector('.btn-exp').addEventListener('click', onExp);
+        
+    // Atribuição explícita de gatilhos operacionais de clique
+    row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
+    row.querySelector('.btn-del').onclick = (e) => { e.stopPropagation(); onDel(); };
+    row.querySelector('.btn-exp').onclick = (e) => { e.stopPropagation(); onExp(); };
     return row;
 }
 
 function saveState() {
-    fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(database) }).then(() => {
-        renderSidebar(); renderMosaic(); renderCrudManager();
+    // Sincroniza via PUT com o Firebase Realtime Database
+    fetch(CONFIG.FIREBASE_URL, { 
+        method: 'PUT', 
+        body: JSON.stringify(database) 
+    })
+    .then(() => {
+        // Redesenha as listas na interface imediatamente após receber a confirmação
+        renderSidebar(); 
+        renderMosaic(); 
+        renderCrudManager();
+    })
+    .catch(err => {
+        console.error("Falha ao salvar no Firebase, atualizando interface localmente: ", err);
+        renderSidebar(); 
+        renderMosaic(); 
+        renderCrudManager();
     });
 }
 
@@ -396,10 +442,11 @@ function downloadJSON(obj, filename) {
     const a = document.createElement('a');
     a.setAttribute("href", dataStr);
     a.setAttribute("download", `${filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_backup.json`);
+    document.body.appendChild(a);
     a.click();
+    a.remove();
 }
 
-// MODIFICADO: Função salva mídia única ou desmembra uma playlist inteira trazida pela API
 async function saveMediaToDatabase() {
     const cat = document.getElementById('media-category').value.trim();
     const sub = document.getElementById('media-subcategory').value.trim();
@@ -415,7 +462,6 @@ async function saveMediaToDatabase() {
     if(!database[cat][sub]) database[cat][sub] = [];
 
     if (mediaType === 'playlist') {
-        // Se for um bloco de playlist, busca os itens internos para salvar em lote
         const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${idOrList}&key=${CONFIG.YT_API_KEY}`;
         try {
             const res = await fetch(url);
@@ -432,21 +478,22 @@ async function saveMediaToDatabase() {
                 });
             }
         } catch(e) {
-            console.error("Erro ao mapear itens da playlist para o banco", e);
+            console.error("Erro ao importar playlist", e);
         }
     } else {
-        // Vídeo comum individual
         database[cat][sub].push({ id: "v_" + Date.now(), title, youtubeId: idOrList, thumb, channel });
     }
 
     saveState();
+    document.getElementById('media-category').value = '';
+    document.getElementById('media-subcategory').value = '';
     closeAllModals();
     currentView = 'categories';
     renderMosaic();
 }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS E COMPORTAMENTOS
+// CONFIGURAÇÃO DOS GATILHOS
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -464,7 +511,11 @@ function setupEventListeners() {
     });
     
     document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
-    document.getElementById('btn-open-admin').addEventListener('click', () => document.getElementById('admin-modal').classList.remove('hidden'));
+    document.getElementById('btn-open-admin').addEventListener('click', () => {
+        document.getElementById('admin-modal').classList.remove('hidden');
+        renderCrudManager(); // Força renderização ao abrir a janela modal
+    });
+    
     document.getElementById('btn-close-admin').addEventListener('click', closeAllModals);
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
     document.getElementById('btn-export-json').addEventListener('click', () => downloadJSON(database, 'banco_completo'));
@@ -473,6 +524,16 @@ function setupEventListeners() {
     document.getElementById('btn-close-player').addEventListener('click', () => {
         if(ytPlayer) ytPlayer.stopVideo();
         document.getElementById('player-container').classList.add('hidden');
+    });
+
+    // Evento de alternância visual das abas do painel
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            e.target.classList.add('active');
+            document.getElementById(e.target.dataset.tab).classList.remove('hidden');
+        });
     });
 }
 
