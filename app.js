@@ -206,7 +206,6 @@ function renderSidebar() {
                 currentView = 'tracks';
                 renderMosaic();
                 
-                // Fecha automaticamente no mobile ao escolher uma subcategoria
                 if(window.innerWidth <= 768) {
                     const sidebar = document.getElementById('sidebar');
                     sidebar.classList.remove('open');
@@ -615,7 +614,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
     document.getElementById(targetTabId).classList.remove('hidden');
 }
 
-// ADICIONADO: Função unificada e blindada para alternar o menu lateral em telas desktop e mobile
+// CORREÇÃO VISADA: Evento unificado para impedir cliques fantasmas em dispositivos móveis
 function handleToggleSidebar(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
     const sidebar = document.getElementById('sidebar');
@@ -629,8 +628,10 @@ function handleToggleSidebar(e) {
     }
 }
 
+function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
+
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS
+// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -641,54 +642,52 @@ function setupEventListeners() {
         filterInternalDatabase(e.target.value);
     });
 
-    document.getElementById('btn-fetch-manual').addEventListener('click', fetchManualLinkData);
+    // BLINDAGEM DO PAINEL DE CONTROLE: Unificação por pointerdown para evitar loops assíncronos no Firebase
+    document.getElementById('btn-fetch-manual').onpointerdown = (e) => fetchManualLinkData(e);
+    document.getElementById('btn-save-media').onpointerdown = (e) => saveMediaToDatabase(e);
 
-    // CORREÇÃO: Escuta tanto cliques convencionais quanto toques de toque (touchstart) rápidos para mobile
-    const toggleBtn = document.getElementById('toggle-sidebar');
-    toggleBtn.addEventListener('click', handleToggleSidebar);
-    toggleBtn.addEventListener('touchstart', handleToggleSidebar, { passive: false });
+    // BLINDAGEM DO HAMBÚRGUER: Evento Pointer único intercepta toque e clique sem duplicidade
+    document.getElementById('toggle-sidebar').onpointerdown = (e) => handleToggleSidebar(e);
     
     document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
     
-    document.getElementById('btn-open-admin').onclick = (e) => {
-        e.preventDefault();
+    document.getElementById('btn-open-admin').onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation();
         document.getElementById('admin-modal').classList.remove('hidden');
         switchTabs('add-tab', 'tab-trigger-add');
         renderCrudManager(); 
     };
     
-    document.getElementById('btn-close-admin').onclick = (e) => {
-        e.preventDefault();
+    document.getElementById('btn-close-admin').onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation();
         closeAllModals();
     };
-
-    document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
     
-    document.getElementById('btn-export-json').onclick = (e) => {
-        e.preventDefault();
+    document.getElementById('btn-export-json').onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation();
         downloadJSON(database, 'banco_completo');
     };
     
-    document.getElementById('btn-trigger-import').onclick = (e) => {
-        e.preventDefault();
+    document.getElementById('btn-trigger-import').onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation();
         document.getElementById('import-json-file').click();
     };
     
     document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
 
-    document.getElementById('tab-trigger-manage').onclick = (e) => {
-        e.preventDefault();
+    document.getElementById('tab-trigger-manage').onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation();
         switchTabs('manage-tab', 'tab-trigger-manage');
         renderCrudManager();
     };
 
-    document.getElementById('tab-trigger-add').onclick = (e) => {
-        e.preventDefault();
+    document.getElementById('tab-trigger-add').onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation();
         switchTabs('add-tab', 'tab-trigger-add');
     };
     
-    document.getElementById('btn-close-player').onclick = (e) => {
-        e.preventDefault();
+    document.getElementById('btn-close-player').onpointerdown = (e) => {
+        e.preventDefault(); e.stopPropagation();
         if(ytPlayer) ytPlayer.stopVideo();
         document.getElementById('player-container').classList.add('hidden');
     };
