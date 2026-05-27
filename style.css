@@ -107,6 +107,11 @@ body {
 .tree-sub li { cursor: pointer; padding: 2px 0; }
 .tree-sub li:hover { color: var(--accent); }
 
+/* Backup Horizontal Row */
+.backup-actions { display: flex; gap: 0.5rem; justify-content: center; }
+.btn-secondary { background: #282828; color: #fff; border: 1px solid var(--border); }
+.btn-secondary:hover { background: #383838; border-color: var(--accent); }
+
 /* Lista CRUD Gerencial */
 .crud-list { text-align: left; margin-top: 1.5rem; background: #111; padding: 1rem; border-radius: 6px; }
 .crud-item { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.5rem; border-bottom: 1px solid #222; gap: 1rem; }
@@ -150,4 +155,5 @@ button:hover { background: var(--accent-hover); }
     .sidebar.open { transform: translateX(0); }
     .sidebar.collapsed { transform: translateX(-100%); }
     .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
+    .backup-actions { flex-direction: column; gap: 0; }
 }
