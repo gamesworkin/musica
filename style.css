@@ -148,28 +148,27 @@ button:hover { background: var(--accent-hover); }
 .breadcrumb { font-size: 0.9rem; color: var(--text-muted); }
 .clickable { cursor: pointer; color: var(--text-main); }
 
-/* Responsividade Mobile (CORRIGIDO) */
+/* Responsividade Mobile (BLINDADA CONTRA SOBREPOSIÇÃO) */
 @media (max-width: 768px) {
     .logo { display: none; }
     
-    /* Configuração padrão oculta por deslizamento lateral */
     .sidebar { 
         position: fixed; 
         left: 0; 
         top: 60px; 
         bottom: 0; 
-        z-index: 999; 
+        z-index: 99999 !important; /* Força ficar acima de qualquer card ou mosaico */
         transform: translateX(-100%); 
         width: 260px !important; 
         padding: 1.5rem !important; 
         border-right: 1px solid var(--border);
+        background: var(--bg-sidebar) !important;
+        display: block !important;
+        transition: transform 0.3s ease-in-out !important;
     }
     
-    /* CORREÇÃO CRÍTICA: Especificidade absoluta para sobrepor o translateX anterior e forçar abertura */
     .sidebar.open { 
         transform: translateX(0) !important; 
-        display: block !important;
-        overflow-y: auto !important;
     }
     
     .sidebar.collapsed { 
