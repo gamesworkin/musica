@@ -35,7 +35,7 @@ body {
 }
 .modal-content.admin-box { max-width: 750px; max-height: 85vh; overflow-y: auto; }
 
-/* Header */
+/* Header e Container de Ações */
 .main-header {
     height: 60px; background: var(--bg-sidebar);
     display: flex; align-items: center; justify-content: space-between;
@@ -44,6 +44,10 @@ body {
 .header-left { display: flex; align-items: center; gap: 1rem; }
 .logo { font-size: 1.5rem; font-weight: bold; }
 .logo span { color: var(--accent); }
+
+.header-actions { display: flex; gap: 0.5rem; align-items: center; }
+.logout-btn { background: #333; color: #ff4d4d; width: auto; margin: 0; padding: 0.5rem 1rem; white-space: nowrap; font-weight: bold; }
+.logout-btn:hover { background: #442222; }
 
 .search-container { position: relative; width: 100%; max-width: 450px; }
 .search-container input {
@@ -133,6 +137,7 @@ input { background: #333; color: #fff; }
 input:focus { border: 1px solid var(--accent); }
 button { background: var(--accent); color: #fff; font-weight: bold; cursor: pointer; }
 button:hover { background: var(--accent-hover); }
+.admin-btn { width: auto; white-space: nowrap; margin: 0; padding: 0.5rem 1rem; }
 .breadcrumb { font-size: 0.9rem; color: var(--text-muted); }
 .clickable { cursor: pointer; color: var(--text-main); }
 
