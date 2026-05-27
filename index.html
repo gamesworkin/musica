@@ -27,7 +27,7 @@
             
             <div class="search-container">
                 <i class="fab fa-youtube search-icon text-red"></i>
-                <input type="text" id="search-yt-input" placeholder="Pesquisar músicas direto no YouTube...">
+                <input type="text" id="search-yt-input" placeholder="Pesquisar músicas ou playlists direto no YouTube...">
             </div>
 
             <button id="btn-open-admin" class="admin-btn"><i class="fas fa-cog"></i> Gerenciar</button>
@@ -77,13 +77,13 @@
             
             <div class="admin-tabs">
                 <button class="tab-btn active" data-tab="add-tab">Adicionar Mídia</button>
-                <button class="tab-btn" data-tab="manage-tab">Editar / Excluir / Exportar</button>
+                <button class="tab-btn" data-tab="manage-tab" id="tab-trigger-manage">Editar / Excluir / Exportar</button>
             </div>
 
             <div id="add-tab" class="tab-content">
                 <div class="preview-box" id="yt-preview">
                     <img id="prev-thumb" src="https://placehold.co/120x90?text=Sem+Thumb" alt="Thumbnail">
-                    <input type="text" id="prev-title" placeholder="Título do Vídeo capturado">
+                    <input type="text" id="prev-title" placeholder="Título da Mídia capturada">
                 </div>
                 <div class="form-group">
                     <input type="text" id="media-category" placeholder="Categoria (ex: Rock, Pop) - Digite Manualmente">
@@ -94,7 +94,7 @@
 
             <div id="manage-tab" class="tab-content hidden">
                 <div class="backup-actions">
-                    <button id="btn-export-json" class="btn-secondary"><i class="fas fa-download"></i> Exportar Tudo (JSON)</button>
+                    <button id="btn-export-json" class="btn-secondary"><i class="fas fa-download"></i> Exportar Tudo Completo (JSON)</button>
                 </div>
                 <div id="crud-tree-list" class="crud-list">
                     </div>
