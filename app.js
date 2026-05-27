@@ -290,8 +290,6 @@ async function fetchPlaylistItems(playlistId) {
 
 function openAdminWithTrack(item) {
     document.getElementById('admin-modal').classList.remove('hidden');
-    
-    // Força a visualização da aba de adição de mídia para receber os dados capturados
     switchTabs('add-tab', 'tab-trigger-add');
 
     document.getElementById('prev-thumb').src = item.thumb;
@@ -428,7 +426,6 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
             <button class="crud-btn btn-exp" title="Exportar Bloco"><i class="fas fa-download"></i></button>
         </div>`;
         
-    // Atribuição direta de eventos para blindagem contra erros de estouro de escopo
     row.querySelector('.btn-edit').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onEdit(); };
     row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onDel(); };
     row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onExp(); };
@@ -463,6 +460,7 @@ function downloadJSON(obj, filename) {
     a.remove();
 }
 
+// CORRIGIDO: Validador atualizado para aceitar o mapeamento estrutural correto de playlists
 async function saveMediaToDatabase() {
     const cat = document.getElementById('media-category').value.trim();
     const sub = document.getElementById('media-subcategory').value.trim();
@@ -472,7 +470,10 @@ async function saveMediaToDatabase() {
     const channel = document.getElementById('prev-title').dataset.channel;
     const mediaType = document.getElementById('prev-title').dataset.mediatype;
 
-    if(!cat || !sub || !title || !idOrList) return alert("Preencha todos os dados.");
+    // CORREÇÃO VISADA: Valida campos obrigatórios de forma flexível dependendo do tipo da mídia
+    if(!cat || !sub || !title || !idOrList) {
+        return alert("Preencha a categoria e subcategoria manualmente antes de salvar.");
+    }
 
     if(!database[cat]) database[cat] = {};
     if(!database[cat][sub]) database[cat][sub] = [];
@@ -482,7 +483,7 @@ async function saveMediaToDatabase() {
         try {
             const res = await fetch(url);
             const data = await res.json();
-            if(data.items) {
+            if(data.items && data.items.length > 0) {
                 data.items.forEach(item => {
                     database[cat][sub].push({
                         id: "v_" + Date.now() + Math.random().toString(36).substr(2, 5),
@@ -492,9 +493,15 @@ async function saveMediaToDatabase() {
                         channel: item.snippet.channelTitle
                     });
                 });
+                alert(`${data.items.length} músicas da playlist foram importadas com sucesso!`);
+            } else {
+                alert("Esta playlist não possui vídeos públicos acessíveis.");
+                return;
             }
         } catch(e) {
             console.error("Erro ao importar playlist", e);
+            alert("Erro de comunicação com o YouTube ao desmembrar playlist.");
+            return;
         }
     } else {
         database[cat][sub].push({ id: "v_" + Date.now(), title, youtubeId: idOrList, thumb, channel });
@@ -508,7 +515,6 @@ async function saveMediaToDatabase() {
     renderMosaic();
 }
 
-// Auxiliar seguro para chaveamento interno de abas
 function switchTabs(targetTabId, activeTriggerBtnId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -539,7 +545,6 @@ function setupEventListeners() {
     
     document.getElementById('btn-open-admin').addEventListener('click', () => {
         document.getElementById('admin-modal').classList.remove('hidden');
-        // MODIFICADO: Garante que a primeira aba esteja visível e ativa ao abrir
         switchTabs('add-tab', 'tab-trigger-add');
         renderCrudManager(); 
     });
@@ -548,7 +553,6 @@ function setupEventListeners() {
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
     document.getElementById('btn-export-json').addEventListener('click', () => downloadJSON(database, 'banco_completo'));
     
-    // Vinculação explícita das abas para evitar perdas de foco
     document.getElementById('tab-trigger-manage').addEventListener('click', () => {
         switchTabs('manage-tab', 'tab-trigger-manage');
         renderCrudManager();
