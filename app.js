@@ -205,6 +205,13 @@ function renderSidebar() {
                 selectedSubcategory = sub;
                 currentView = 'tracks';
                 renderMosaic();
+                
+                // Fecha automaticamente a barra lateral em aparelhos mobile após selecionar a subcategoria
+                if(window.innerWidth <= 768) {
+                    const sidebar = document.getElementById('sidebar');
+                    sidebar.classList.remove('open');
+                    sidebar.classList.add('collapsed');
+                }
             });
             subUl.appendChild(subLi);
         });
@@ -291,7 +298,7 @@ async function fetchPlaylistItems(playlistId) {
 }
 
 async function fetchManualLinkData(e) {
-    if(e) { e.preventDefault(); e.stopPropagation(); } // BLINDAGEM CONTRA CONCORRÊNCIA
+    if(e) { e.preventDefault(); e.stopPropagation(); } 
     
     const url = document.getElementById('manual-media-url').value.trim();
     if(!url) return alert("Cole uma URL válida do YouTube.");
@@ -545,7 +552,7 @@ function downloadJSON(obj, filename) {
 }
 
 async function saveMediaToDatabase(e) {
-    if(e) { e.preventDefault(); e.stopPropagation(); } // BLINDAGEM ABSOLUTA CONTRA SUBMIT EVENT TRAVAMENTOS
+    if(e) { e.preventDefault(); e.stopPropagation(); } 
 
     const cat = document.getElementById('media-category').value.trim();
     const sub = document.getElementById('media-subcategory').value.trim();
@@ -609,7 +616,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
+// CONFIGURAÇÃO DOS GATILHOS
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -620,7 +627,6 @@ function setupEventListeners() {
         filterInternalDatabase(e.target.value);
     });
 
-    // Vinculação com interceptador de travamento
     document.getElementById('btn-fetch-manual').addEventListener('click', fetchManualLinkData);
 
     document.getElementById('toggle-sidebar').addEventListener('click', () => {
@@ -643,7 +649,6 @@ function setupEventListeners() {
         closeAllModals();
     };
 
-    // Vinculação com interceptador de travamento
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
     
     document.getElementById('btn-export-json').onclick = (e) => {
