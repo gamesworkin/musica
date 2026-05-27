@@ -214,7 +214,7 @@ function renderSidebar() {
 }
 
 // ==========================================
-// 4. PESQUISA GLOBAL YOUTUBE (CORRIGIDA)
+// 4. PESQUISA GLOBAL YOUTUBE (V3)
 // ==========================================
 async function searchYouTubeGlobal(query) {
     if(!query.trim()) return;
@@ -230,7 +230,6 @@ async function searchYouTubeGlobal(query) {
     renderMosaic();
     document.getElementById('mosaic-grid').innerHTML = '<h3>Buscando no YouTube...</h3>';
 
-    /* CORREÇÃO DO ERRO DA API KEY: Removido 'videoCategoryId=10' para permitir busca multi-tipo (video,playlist) sem quebras */
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=${encodeURIComponent(query)}&type=video,playlist&key=${CONFIG.YT_API_KEY}`;
     
     try {
@@ -291,6 +290,10 @@ async function fetchPlaylistItems(playlistId) {
 
 function openAdminWithTrack(item) {
     document.getElementById('admin-modal').classList.remove('hidden');
+    
+    // Força a visualização da aba de adição de mídia para receber os dados capturados
+    switchTabs('add-tab', 'tab-trigger-add');
+
     document.getElementById('prev-thumb').src = item.thumb;
     document.getElementById('prev-title').value = item.title;
     document.getElementById('prev-title').dataset.videoid = item.youtubeId;
@@ -352,13 +355,13 @@ function onPlayerStateChange(event) {
 }
 
 // ==========================================
-// 6. SOLUÇÃO DO COMPONENTE CRUD (CORRIGIDO)
+// 6. COMPONENTE CRUD (CORRIGIDO E SEGURO)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
     listContainer.innerHTML = '';
 
-    if (Object.keys(database).length === 0) {
+    if (!database || Object.keys(database).length === 0) {
         listContainer.innerHTML = '<p style="color: #666; padding: 1rem;">Seu banco de dados está vazio.</p>';
         return;
     }
@@ -394,7 +397,7 @@ function renderCrudManager() {
                     }
                 }, () => downloadJSON(database[cat][sub], sub)));
 
-                if (database[cat][sub]) {
+                if (database[cat][sub] && Array.isArray(database[cat][sub])) {
                     database[cat][sub].forEach((track, idx) => {
                         listContainer.appendChild(createCrudRow(track.title, 'track', () => {
                             let novo = prompt("Novo título da Música:", track.title);
@@ -425,9 +428,10 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
             <button class="crud-btn btn-exp" title="Exportar Bloco"><i class="fas fa-download"></i></button>
         </div>`;
         
-    row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
-    row.querySelector('.btn-del').onclick = (e) => { e.stopPropagation(); onDel(); };
-    row.querySelector('.btn-exp').onclick = (e) => { e.stopPropagation(); onExp(); };
+    // Atribuição direta de eventos para blindagem contra erros de estouro de escopo
+    row.querySelector('.btn-edit').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onEdit(); };
+    row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onDel(); };
+    row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onExp(); };
     return row;
 }
 
@@ -442,7 +446,7 @@ function saveState() {
         renderCrudManager();
     })
     .catch(err => {
-        console.error("Falha ao salvar no Firebase, atualizando interface localmente: ", err);
+        console.error("Erro na sincronização Firebase, atualizando local: ", err);
         renderSidebar(); 
         renderMosaic(); 
         renderCrudManager();
@@ -504,6 +508,15 @@ async function saveMediaToDatabase() {
     renderMosaic();
 }
 
+// Auxiliar seguro para chaveamento interno de abas
+function switchTabs(targetTabId, activeTriggerBtnId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    
+    document.getElementById(activeTriggerBtnId).classList.add('active');
+    document.getElementById(targetTabId).classList.remove('hidden');
+}
+
 // ==========================================
 // CONFIGURAÇÃO DOS GATILHOS
 // ==========================================
@@ -523,29 +536,33 @@ function setupEventListeners() {
     });
     
     document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
+    
     document.getElementById('btn-open-admin').addEventListener('click', () => {
         document.getElementById('admin-modal').classList.remove('hidden');
+        // MODIFICADO: Garante que a primeira aba esteja visível e ativa ao abrir
+        switchTabs('add-tab', 'tab-trigger-add');
         renderCrudManager(); 
     });
     
     document.getElementById('btn-close-admin').addEventListener('click', closeAllModals);
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
     document.getElementById('btn-export-json').addEventListener('click', () => downloadJSON(database, 'banco_completo'));
-    document.getElementById('tab-trigger-manage').addEventListener('click', renderCrudManager);
+    
+    // Vinculação explícita das abas para evitar perdas de foco
+    document.getElementById('tab-trigger-manage').addEventListener('click', () => {
+        switchTabs('manage-tab', 'tab-trigger-manage');
+        renderCrudManager();
+    });
+    document.getElementById('tab-trigger-add').addEventListener('click', () => {
+        switchTabs('add-tab', 'tab-trigger-add');
+    });
     
     document.getElementById('btn-close-player').addEventListener('click', () => {
         if(ytPlayer) ytPlayer.stopVideo();
         document.getElementById('player-container').classList.add('hidden');
     });
-
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-            e.target.classList.add('active');
-            document.getElementById(e.target.dataset.tab).classList.remove('hidden');
-        });
-    });
 }
+
+function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 window.onload = checkSession;
