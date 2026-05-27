@@ -288,10 +288,68 @@ async function fetchPlaylistItems(playlistId) {
     }
 }
 
+// ADICIONADO: Função que processa e captura os dados de uma URL colada manualmente
+async function fetchManualLinkData() {
+    const url = document.getElementById('manual-media-url').value.trim();
+    if(!url) return alert("Cole uma URL válida do YouTube.");
+
+    document.getElementById('btn-fetch-manual').innerText = "Buscando...";
+
+    let isPlaylist = url.includes('list=');
+    let targetId = "";
+
+    if(isPlaylist) {
+        const urlParams = new URLSearchParams(new URL(url).search);
+        targetId = urlParams.get('list');
+    } else {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        targetId = (match && match[2].length == 11) ? match[2] : url;
+    }
+
+    if(!targetId) {
+        document.getElementById('btn-fetch-manual').innerText = "Capturar Dados";
+        return alert("Não foi possível extrair o ID desta URL.");
+    }
+
+    const endpoint = isPlaylist ? 'playlists' : 'videos';
+    const apiUrl = `https://www.googleapis.com/youtube/v3/${endpoint}?part=snippet&id=${targetId}&key=${CONFIG.YT_API_KEY}`;
+
+    try {
+        const res = await fetch(apiUrl);
+        const data = await res.json();
+        if(data.items && data.items.length > 0) {
+            const snippet = data.items[0].snippet;
+            const item = {
+                type: isPlaylist ? 'playlist' : 'video',
+                youtubeId: targetId,
+                title: snippet.title,
+                thumb: snippet.thumbnails.medium ? snippet.thumbnails.medium.url : 'https://placehold.co/120x90',
+                channel: snippet.channelTitle
+            };
+            
+            // Alimenta a visualização do painel
+            document.getElementById('prev-thumb').src = item.thumb;
+            document.getElementById('prev-title').value = item.title;
+            document.getElementById('prev-title').dataset.videoid = item.youtubeId;
+            document.getElementById('prev-title').dataset.channel = item.channel;
+            document.getElementById('prev-title').dataset.mediatype = item.type;
+        } else {
+            alert("Nenhuma mídia encontrada com esta URL. Verifique se o conteúdo é público.");
+        }
+    } catch(e) {
+        console.error(e);
+        alert("Erro de comunicação com a API do YouTube.");
+    } finally {
+        document.getElementById('btn-fetch-manual').innerText = "Capturar Dados";
+    }
+}
+
 function openAdminWithTrack(item) {
     document.getElementById('admin-modal').classList.remove('hidden');
     switchTabs('add-tab', 'tab-trigger-add');
 
+    document.getElementById('manual-media-url').value = ""; // Limpa campo manual
     document.getElementById('prev-thumb').src = item.thumb;
     document.getElementById('prev-title').value = item.title;
     document.getElementById('prev-title').dataset.videoid = item.youtubeId;
@@ -353,7 +411,7 @@ function onPlayerStateChange(event) {
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD (CORRIGIDO E SEGURO)
+// 6. COMPONENTE CRUD
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
@@ -460,7 +518,6 @@ function downloadJSON(obj, filename) {
     a.remove();
 }
 
-// CORRIGIDO: Validador atualizado para aceitar o mapeamento estrutural correto de playlists
 async function saveMediaToDatabase() {
     const cat = document.getElementById('media-category').value.trim();
     const sub = document.getElementById('media-subcategory').value.trim();
@@ -470,7 +527,6 @@ async function saveMediaToDatabase() {
     const channel = document.getElementById('prev-title').dataset.channel;
     const mediaType = document.getElementById('prev-title').dataset.mediatype;
 
-    // CORREÇÃO VISADA: Valida campos obrigatórios de forma flexível dependendo do tipo da mídia
     if(!cat || !sub || !title || !idOrList) {
         return alert("Preencha a categoria e subcategoria manualmente antes de salvar.");
     }
@@ -508,6 +564,7 @@ async function saveMediaToDatabase() {
     }
 
     saveState();
+    document.getElementById('manual-media-url').value = '';
     document.getElementById('media-category').value = '';
     document.getElementById('media-subcategory').value = '';
     closeAllModals();
@@ -534,6 +591,9 @@ function setupEventListeners() {
     document.getElementById('search-internal-input').addEventListener('input', (e) => {
         filterInternalDatabase(e.target.value);
     });
+
+    // ADICIONADO: Gatilho para o clique do botão de captura de link manual
+    document.getElementById('btn-fetch-manual').addEventListener('click', fetchManualLinkData);
 
     document.getElementById('toggle-sidebar').addEventListener('click', () => {
         const sidebar = document.getElementById('sidebar');
@@ -566,7 +626,5 @@ function setupEventListeners() {
         document.getElementById('player-container').classList.add('hidden');
     });
 }
-
-function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 window.onload = checkSession;
