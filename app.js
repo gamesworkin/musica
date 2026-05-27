@@ -146,6 +146,8 @@ function renderMosaic() {
         document.getElementById('bc-search').classList.remove('hidden');
         lastYtSearchResults.forEach(item => {
             const isPlaylist = item.type === 'playlist';
+            
+            // MODIFICADO: Passa o status 'isPlaylist' para customizar o texto do botão interno do card
             const card = createCard(item.title, item.thumb, true, isPlaylist, null);
             card.querySelector('.add-music-badge').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -156,6 +158,7 @@ function renderMosaic() {
     }
 }
 
+// MODIFICADO: A função agora renderiza "Add Playlist" dinamicamente com base no parâmetro isPlaylist
 function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback) {
     const card = document.createElement('div');
     card.className = 'card';
@@ -165,7 +168,8 @@ function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, cl
         htmlContent += `<span class="media-type-badge"><i class="fas fa-list"></i> Playlist</span>`;
     }
     if(showAddButton) {
-        htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> Add</button>`;
+        const btnText = isPlaylist ? "Add Playlist" : "Add";
+        htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> ${btnText}</button>`;
     }
     
     card.innerHTML = htmlContent;
@@ -288,7 +292,6 @@ async function fetchPlaylistItems(playlistId) {
     }
 }
 
-// ADICIONADO: Função que processa e captura os dados de uma URL colada manualmente
 async function fetchManualLinkData() {
     const url = document.getElementById('manual-media-url').value.trim();
     if(!url) return alert("Cole uma URL válida do YouTube.");
@@ -328,14 +331,13 @@ async function fetchManualLinkData() {
                 channel: snippet.channelTitle
             };
             
-            // Alimenta a visualização do painel
             document.getElementById('prev-thumb').src = item.thumb;
             document.getElementById('prev-title').value = item.title;
             document.getElementById('prev-title').dataset.videoid = item.youtubeId;
             document.getElementById('prev-title').dataset.channel = item.channel;
             document.getElementById('prev-title').dataset.mediatype = item.type;
         } else {
-            alert("Nenhuma mídia encontrada com esta URL. Verifique se o conteúdo é público.");
+            alert("Nenhuma mídia encontrada com esta URL.");
         }
     } catch(e) {
         console.error(e);
@@ -349,7 +351,7 @@ function openAdminWithTrack(item) {
     document.getElementById('admin-modal').classList.remove('hidden');
     switchTabs('add-tab', 'tab-trigger-add');
 
-    document.getElementById('manual-media-url').value = ""; // Limpa campo manual
+    document.getElementById('manual-media-url').value = ""; 
     document.getElementById('prev-thumb').src = item.thumb;
     document.getElementById('prev-title').value = item.title;
     document.getElementById('prev-title').dataset.videoid = item.youtubeId;
@@ -556,7 +558,7 @@ async function saveMediaToDatabase() {
             }
         } catch(e) {
             console.error("Erro ao importar playlist", e);
-            alert("Erro de comunicação com o YouTube ao desmembrar playlist.");
+            alert("Erro de comunicação com o YouTube.");
             return;
         }
     } else {
@@ -592,7 +594,6 @@ function setupEventListeners() {
         filterInternalDatabase(e.target.value);
     });
 
-    // ADICIONADO: Gatilho para o clique do botão de captura de link manual
     document.getElementById('btn-fetch-manual').addEventListener('click', fetchManualLinkData);
 
     document.getElementById('toggle-sidebar').addEventListener('click', () => {
