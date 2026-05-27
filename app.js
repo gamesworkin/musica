@@ -1,12 +1,11 @@
 // CONFIGURAÇÕES GERAIS - INSIRA SUAS CHAVES AQUI
 const CONFIG = {
-    ADMIN_USER: "admin",       // Seu usuário pessoal de acesso
-    ADMIN_PASSWORD: "123",     // Sua senha pessoal de acesso
+    ADMIN_USER: "admin",       
+    ADMIN_PASSWORD: "123",     
     YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
     FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/musicas.json" 
 };
 
-// ESTADO GLOBAL DA APLICAÇÃO (Árvore sincronizada com o Firebase)
 let database = {
     "Rock": {
         "Nacionais": [
@@ -15,36 +14,60 @@ let database = {
     }
 };
 
-let currentView = 'categories'; // categories, subcategories, tracks, search_results
+let currentView = 'categories'; 
 let selectedCategory = '';
 let selectedSubcategory = '';
 let currentPlaylist = [];
 let currentTrackIndex = 0;
 let ytPlayer = null;
-let lastYtSearchResults = []; // Cache local dos resultados da busca global
+let lastYtSearchResults = []; 
 
 // ==========================================
-// 1. AUTENTICAÇÃO
+// 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS E ENTER
 // ==========================================
-document.getElementById('btn-login').addEventListener('click', () => {
+function checkSession() {
+    const loginData = localStorage.getItem('streamhub_session');
+    if (loginData) {
+        const session = JSON.parse(loginData);
+        const twoHours = 2 * 60 * 60 * 1000;
+        if (Date.now() - session.timestamp < twoHours) {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-container').classList.remove('hidden');
+            initApp();
+            return;
+        }
+    }
+    localStorage.removeItem('streamhub_session');
+}
+
+document.getElementById('login-user').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-pass').focus();
+});
+document.getElementById('login-pass').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleLogin();
+});
+document.getElementById('btn-login').addEventListener('click', handleLogin);
+
+function handleLogin() {
     const inputUser = document.getElementById('login-user').value;
     const inputPass = document.getElementById('login-pass').value;
     
     if (inputUser === CONFIG.ADMIN_USER && inputPass === CONFIG.ADMIN_PASSWORD) {
+        const sessionValue = { user: inputUser, timestamp: Date.now() };
+        localStorage.setItem('streamhub_session', JSON.stringify(sessionValue));
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
         initApp();
     } else {
         alert("Usuário ou senha incorretos!");
     }
-});
+}
 
 function initApp() {
-    // Tenta puxar a base de dados em tempo real do Firebase caso configurado
     fetch(CONFIG.FIREBASE_URL)
         .then(res => res.json())
         .then(data => { if(data) database = data; })
-        .catch(e => console.log("Usando banco local padrão simulado."))
+        .catch(e => console.log("Usando banco local padrão."))
         .finally(() => {
             renderSidebar();
             renderMosaic();
@@ -59,18 +82,18 @@ function renderMosaic() {
     const grid = document.getElementById('mosaic-grid');
     grid.innerHTML = '';
 
-    // Gerenciador de visibilidade das breadcrumbs
     document.getElementById('bc-category').classList.add('hidden');
     document.getElementById('bc-subcategory').classList.add('hidden');
     document.getElementById('bc-search').classList.add('hidden');
 
     if (currentView === 'categories') {
         Object.keys(database).forEach(cat => {
+            if (Object.keys(database[cat]).length === 0) return;
             const firstSub = Object.keys(database[cat])[0];
-            const firstTrack = firstSub ? database[cat][firstSub][0] : null;
+            const firstTrack = database[cat][firstSub] ? database[cat][firstSub][0] : null;
             const thumb = firstTrack ? firstTrack.thumb : 'https://placehold.co/300x200?text=Vazio';
 
-            grid.appendChild(createCard(cat, thumb, false, () => {
+            grid.appendChild(createCard(cat, thumb, false, false, () => {
                 selectedCategory = cat;
                 currentView = 'subcategories';
                 renderMosaic();
@@ -81,16 +104,18 @@ function renderMosaic() {
         document.getElementById('bc-category').classList.remove('hidden');
         document.getElementById('bc-category').querySelector('.txt').innerText = selectedCategory;
 
-        Object.keys(database[selectedCategory]).forEach(sub => {
-            const firstTrack = database[selectedCategory][sub][0];
-            const thumb = firstTrack ? firstTrack.thumb : 'https://placehold.co/300x200?text=Vazio';
+        if(database[selectedCategory]) {
+            Object.keys(database[selectedCategory]).forEach(sub => {
+                const firstTrack = database[selectedCategory][sub][0];
+                const thumb = firstTrack ? firstTrack.thumb : 'https://placehold.co/300x200?text=Vazio';
 
-            grid.appendChild(createCard(sub, thumb, false, () => {
-                selectedSubcategory = sub;
-                currentView = 'tracks';
-                renderMosaic();
-            }));
-        });
+                grid.appendChild(createCard(sub, thumb, false, false, () => {
+                    selectedSubcategory = sub;
+                    currentView = 'tracks';
+                    renderMosaic();
+                }));
+            });
+        }
     } 
     else if (currentView === 'tracks') {
         document.getElementById('bc-category').classList.remove('hidden');
@@ -102,34 +127,33 @@ function renderMosaic() {
         currentPlaylist = tracks; 
 
         tracks.forEach((track, index) => {
-            grid.appendChild(createCard(track.title, track.thumb, false, () => {
+            grid.appendChild(createCard(track.title, track.thumb, false, false, () => {
                 playTrack(index);
             }));
         });
     }
     else if (currentView === 'search_results') {
         document.getElementById('bc-search').classList.remove('hidden');
-        
         lastYtSearchResults.forEach(item => {
-            const card = createCard(item.title, item.thumb, true, null);
-            
-            // Botão "+" dinâmico para adição direta capturada pela API
-            const addBtn = card.querySelector('.add-music-badge');
-            addBtn.addEventListener('click', (e) => {
+            const isPlaylist = item.type === 'playlist';
+            const card = createCard(item.title, item.thumb, true, isPlaylist, null);
+            card.querySelector('.add-music-badge').addEventListener('click', (e) => {
                 e.stopPropagation();
                 openAdminWithTrack(item);
             });
-
             grid.appendChild(card);
         });
     }
 }
 
-function createCard(title, imgSrc, showAddButton = false, clickCallback) {
+function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback) {
     const card = document.createElement('div');
     card.className = 'card';
-    
     let htmlContent = `<img src="${imgSrc}"><h4>${title}</h4>`;
+    
+    if(isPlaylist) {
+        htmlContent += `<span class="media-type-badge"><i class="fas fa-list"></i> Playlist</span>`;
+    }
     if(showAddButton) {
         htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> Add</button>`;
     }
@@ -140,93 +164,26 @@ function createCard(title, imgSrc, showAddButton = false, clickCallback) {
 }
 
 // ==========================================
-// 3. PESQUISA GLOBAL NA API DO YOUTUBE (V3)
+// 3. MENU LATERAL SANFONA
 // ==========================================
-async function searchYouTubeGlobal(query) {
-    if(!query.trim()) return;
-    
-    currentView = 'search_results';
-    renderMosaic();
-    document.getElementById('mosaic-grid').innerHTML = '<h3>Buscando no YouTube...</h3>';
-
-    // categoryId 10 = Restringe por música. Q = Termo digitado.
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=${encodeURIComponent(query)}&type=video&videoCategoryId=10&key=${CONFIG.YT_API_KEY}`;
-    
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        lastYtSearchResults = [];
-        if(data.items) {
-            data.items.forEach(item => {
-                lastYtSearchResults.push({
-                    youtubeId: item.id.videoId,
-                    title: item.snippet.title,
-                    thumb: item.snippet.thumbnails.medium.url,
-                    channel: item.snippet.channelTitle
-                });
-            });
-        }
-        renderMosaic();
-    } catch (e) {
-        console.error("Erro na busca da API do YouTube", e);
-        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro ao conectar à API do YouTube. Confira sua Key.</h3>';
-    }
-}
-
-// Preenche o formulário gerencial automaticamente com os metadados trazidos pela API
-function openAdminWithTrack(item) {
-    document.getElementById('admin-modal').classList.remove('hidden');
-    document.getElementById('prev-thumb').src = item.thumb;
-    document.getElementById('prev-title').value = item.title;
-    document.getElementById('prev-title').dataset.videoid = item.youtubeId;
-    document.getElementById('prev-title').dataset.channel = item.channel;
-    
-    // Foca no campo de categoria para digitação manual rápida
-    document.getElementById('media-category').focus();
-}
-
-// ==========================================
-// 4. PESQUISA / FILTRO INTERNO (FIREBASE)
-// ==========================================
-function filterInternalDatabase(query) {
-    const lowerQuery = query.toLowerCase();
-    const treeItems = document.querySelectorAll('#sidebar-tree > li');
-
-    treeItems.forEach(catLi => {
-        const catName = catLi.querySelector('strong').innerText.toLowerCase();
-        let catHasVisibleSub = false;
-
-        const subLis = catLi.querySelectorAll('.tree-sub li');
-        subLis.forEach(subLi => {
-            const subName = subLi.innerText.toLowerCase();
-            if (subName.includes(lowerQuery) || catName.includes(lowerQuery)) {
-                subLi.classList.remove('hidden');
-                catHasVisibleSub = true;
-            } else {
-                subLi.classList.add('hidden');
-            }
-        });
-
-        if (catName.includes(lowerQuery) || catHasVisibleSub) {
-            catLi.classList.remove('hidden');
-        } else {
-            catLi.classList.add('hidden');
-        }
-    });
-}
-
 function renderSidebar() {
     const tree = document.getElementById('sidebar-tree');
     tree.innerHTML = '';
 
     Object.keys(database).forEach(cat => {
         const catLi = document.createElement('li');
-        catLi.innerHTML = `<strong><i class="fas fa-folder"></i> ${cat}</strong>`;
+        
+        const catToggle = document.createElement('span');
+        catToggle.className = 'category-toggle';
+        catToggle.innerHTML = `<i class="fas fa-folder"></i> ${cat}`;
         
         const subUl = document.createElement('ul');
-        subUl.className = 'tree-sub';
-        
+        subUl.className = 'tree-sub hidden'; 
+
+        catToggle.addEventListener('click', () => {
+            subUl.classList.toggle('hidden');
+        });
+
         Object.keys(database[cat]).forEach(sub => {
             const subLi = document.createElement('li');
             subLi.innerHTML = `<i class="fas fa-music"></i> ${sub}`;
@@ -240,13 +197,114 @@ function renderSidebar() {
             subUl.appendChild(subLi);
         });
 
+        catLi.appendChild(catToggle);
         catLi.appendChild(subUl);
         tree.appendChild(catLi);
     });
 }
 
 // ==========================================
-// 5. PLAYER DE ÁUDIO & CONTROLE DE FILA (AUTO-PLAY)
+// 4. PESQUISA GLOBAL YOUTUBE (V3) - TRAZ VÍDEOS E PLAYLISTS
+// ==========================================
+async function searchYouTubeGlobal(query) {
+    if(!query.trim()) return;
+    
+    // Se for um link direto colado contendo list=, processa direto
+    if(query.includes('list=')) {
+        const urlParams = new URLSearchParams(new URL(query).search);
+        const playlistId = urlParams.get('list');
+        fetchPlaylistItems(playlistId);
+        return;
+    }
+
+    currentView = 'search_results';
+    renderMosaic();
+    document.getElementById('mosaic-grid').innerHTML = '<h3>Buscando no YouTube...</h3>';
+
+    // MODIFICADO: Chamada à API agora busca tanto tipo "video" quanto "playlist"
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(query)}&type=video,playlist&videoCategoryId=10&key=${CONFIG.YT_API_KEY}`;
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        lastYtSearchResults = [];
+        if(data.items) {
+            data.items.forEach(item => {
+                const isPl = item.id.kind === 'youtube#playlist';
+                lastYtSearchResults.push({
+                    type: isPl ? 'playlist' : 'video',
+                    youtubeId: isPl ? item.id.playlistId : item.id.videoId,
+                    title: item.snippet.title,
+                    thumb: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : 'https://placehold.co/300x200?text=Sem+Thumb',
+                    channel: item.snippet.channelTitle
+                });
+            });
+        }
+        renderMosaic();
+    } catch (e) {
+        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro na busca global da API do YouTube.</h3>';
+    }
+}
+
+async function fetchPlaylistItems(playlistId) {
+    currentView = 'search_results';
+    renderMosaic();
+    document.getElementById('mosaic-grid').innerHTML = '<h3>Importando Playlist do YouTube...</h3>';
+    
+    const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=40&playlistId=${playlistId}&key=${CONFIG.YT_API_KEY}`;
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        lastYtSearchResults = [];
+        if(data.items) {
+            data.items.forEach(item => {
+                lastYtSearchResults.push({
+                    type: 'video',
+                    youtubeId: item.snippet.resourceId.videoId,
+                    title: item.snippet.title,
+                    thumb: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : 'https://placehold.co/120x90',
+                    channel: item.snippet.channelTitle
+                });
+            });
+        }
+        renderMosaic();
+    } catch(e) {
+        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro ao processar os dados da Playlist.</h3>';
+    }
+}
+
+function openAdminWithTrack(item) {
+    document.getElementById('admin-modal').classList.remove('hidden');
+    document.getElementById('prev-thumb').src = item.thumb;
+    document.getElementById('prev-title').value = item.title;
+    document.getElementById('prev-title').dataset.videoid = item.youtubeId;
+    document.getElementById('prev-title').dataset.channel = item.channel;
+    document.getElementById('prev-title').dataset.mediatype = item.type; // Grava se é playlist ou single
+    document.getElementById('media-category').focus();
+}
+
+function filterInternalDatabase(query) {
+    const lowerQuery = query.toLowerCase();
+    const treeItems = document.querySelectorAll('#sidebar-tree > li');
+    treeItems.forEach(catLi => {
+        const catName = catLi.querySelector('.category-toggle').innerText.toLowerCase();
+        let hasMatch = false;
+        const subLis = catLi.querySelectorAll('.tree-sub li');
+        subLis.forEach(subLi => {
+            if(subLi.innerText.toLowerCase().includes(lowerQuery)) {
+                subLi.classList.remove('hidden');
+                hasMatch = true;
+            } else {
+                subLi.classList.add('hidden');
+            }
+        });
+        if(catName.includes(lowerQuery) || hasMatch) catLi.classList.remove('hidden');
+        else catLi.classList.add('hidden');
+    });
+}
+
+// ==========================================
+// 5. PLAYER REPRODUÇÃO AUTOMÁTICA CONTINUA
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return;
@@ -268,110 +326,156 @@ function playTrack(index) {
 }
 
 function onPlayerStateChange(event) {
-    if (event.data === 0) { // Vídeo Terminou
+    if (event.data === 0) { 
         if (currentTrackIndex + 1 < currentPlaylist.length) {
             playTrack(currentTrackIndex + 1);
         } else {
-            alert("Playlist concluída!");
+            alert("Fim da playlist!");
         }
     }
 }
 
 // ==========================================
-// 6. CRUD E ATUALIZAÇÃO NO BANCO (PUT)
+// 6. GERENCIAMENTO CRUD EM ÁRVORE (EDITAR/EXCLUIR/EXPORTAR)
 // ==========================================
-function saveMediaToDatabase() {
+function renderCrudManager() {
+    const listContainer = document.getElementById('crud-tree-list');
+    listContainer.innerHTML = '';
+
+    Object.keys(database).forEach(cat => {
+        listContainer.appendChild(createCrudRow(cat, 'category', () => {
+            let novo = prompt("Novo nome da Categoria:", cat);
+            if(novo && novo !== cat) { database[novo] = database[cat]; delete database[cat]; saveState(); }
+        }, () => {
+            if(confirm(`Excluir categoria "${cat}" inteira?`)) { delete database[cat]; saveState(); }
+        }, () => downloadJSON(database[cat], cat)));
+
+        Object.keys(database[cat]).forEach(sub => {
+            listContainer.appendChild(createCrudRow(sub, 'subcategory', () => {
+                let novo = prompt("Novo nome da Subcategoria:", sub);
+                if(novo && novo !== sub) { database[cat][novo] = database[cat][sub]; delete database[cat][sub]; saveState(); }
+            }, () => {
+                if(confirm(`Excluir subcategoria "${sub}" inteira?`)) { delete database[cat][sub]; saveState(); }
+            }, () => downloadJSON(database[cat][sub], sub)));
+
+            database[cat][sub].forEach((track, idx) => {
+                listContainer.appendChild(createCrudRow(track.title, 'track', () => {
+                    let novo = prompt("Novo título da Música:", track.title);
+                    if(novo) { database[cat][sub][idx].title = novo; saveState(); }
+                }, () => {
+                    if(confirm(`Excluir música "${track.title}"?`)) { database[cat][sub].splice(idx, 1); saveState(); }
+                }, () => downloadJSON(track, track.title)));
+            });
+        });
+    });
+}
+
+function createCrudRow(title, type, onEdit, onDel, onExp) {
+    const row = document.createElement('div');
+    row.className = `crud-item ${type === 'subcategory' ? 'sub-level' : type === 'track' ? 'track-level' : ''}`;
+    row.innerHTML = `<span><strong>[${type.toUpperCase()}]</strong> ${title}</span>
+        <div class="crud-actions">
+            <button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>
+            <button class="crud-btn btn-del"><i class="fas fa-trash"></i></button>
+            <button class="crud-btn btn-exp"><i class="fas fa-download"></i></button>
+        </div>`;
+    row.querySelector('.btn-edit').addEventListener('click', onEdit);
+    row.querySelector('.btn-del').addEventListener('click', onDel);
+    row.querySelector('.btn-exp').addEventListener('click', onExp);
+    return row;
+}
+
+function saveState() {
+    fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(database) }).then(() => {
+        renderSidebar(); renderMosaic(); renderCrudManager();
+    });
+}
+
+function downloadJSON(obj, filename) {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    a.setAttribute("download", `${filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_backup.json`);
+    a.click();
+}
+
+// MODIFICADO: Função salva mídia única ou desmembra uma playlist inteira trazida pela API
+async function saveMediaToDatabase() {
     const cat = document.getElementById('media-category').value.trim();
     const sub = document.getElementById('media-subcategory').value.trim();
     const title = document.getElementById('prev-title').value;
-    const vId = document.getElementById('prev-title').dataset.videoid;
+    const idOrList = document.getElementById('prev-title').dataset.videoid;
     const thumb = document.getElementById('prev-thumb').src;
     const channel = document.getElementById('prev-title').dataset.channel;
+    const mediaType = document.getElementById('prev-title').dataset.mediatype;
 
-    if(!cat || !sub || !title || !vId) return alert("Preencha a categoria e subcategoria manualmente.");
+    if(!cat || !sub || !title || !idOrList) return alert("Preencha todos os dados.");
 
     if(!database[cat]) database[cat] = {};
     if(!database[cat][sub]) database[cat][sub] = [];
 
-    database[cat][sub].push({
-        id: "v_" + Date.now(),
-        title: title,
-        youtubeId: vId,
-        thumb: thumb,
-        channel: channel
-    });
+    if (mediaType === 'playlist') {
+        // Se for um bloco de playlist, busca os itens internos para salvar em lote
+        const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${idOrList}&key=${CONFIG.YT_API_KEY}`;
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            if(data.items) {
+                data.items.forEach(item => {
+                    database[cat][sub].push({
+                        id: "v_" + Date.now() + Math.random().toString(36).substr(2, 5),
+                        title: item.snippet.title,
+                        youtubeId: item.snippet.resourceId.videoId,
+                        thumb: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : thumb,
+                        channel: item.snippet.channelTitle
+                    });
+                });
+            }
+        } catch(e) {
+            console.error("Erro ao mapear itens da playlist para o banco", e);
+        }
+    } else {
+        // Vídeo comum individual
+        database[cat][sub].push({ id: "v_" + Date.now(), title, youtubeId: idOrList, thumb, channel });
+    }
 
-    fetch(CONFIG.FIREBASE_URL, {
-        method: 'PUT',
-        body: JSON.stringify(database)
-    }).then(() => {
-        alert("Música indexada e salva no Firebase!");
-        renderSidebar();
-        // Limpa campos manuais
-        document.getElementById('media-category').value = '';
-        document.getElementById('media-subcategory').value = '';
-        closeAllModals();
-        currentView = 'categories';
-        renderMosaic();
-    });
-}
-
-function exportJSON() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(database, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "firebase_songs_backup.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    saveState();
+    closeAllModals();
+    currentView = 'categories';
+    renderMosaic();
 }
 
 // ==========================================
-// EVENTOS DISPARADORES
+// CONFIGURAÇÃO DOS GATILHOS E COMPORTAMENTOS
 // ==========================================
 function setupEventListeners() {
-    // Escuta Enter na pesquisa do Header para disparar busca global (YouTube)
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
         if(e.key === 'Enter') searchYouTubeGlobal(e.target.value);
     });
 
-    // Escuta digitação no menu esquerdo para filtrar base interna (Firebase)
     document.getElementById('search-internal-input').addEventListener('input', (e) => {
         filterInternalDatabase(e.target.value);
     });
 
     document.getElementById('toggle-sidebar').addEventListener('click', () => {
-        document.getElementById('sidebar').classList.toggle('open');
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+        sidebar.classList.toggle('open');
     });
     
-    document.getElementById('bc-root').addEventListener('click', () => {
-        currentView = 'categories';
-        renderMosaic();
-    });
-
-    document.getElementById('btn-open-admin').addEventListener('click', () => {
-        document.getElementById('admin-modal').classList.remove('hidden');
-    });
-    
+    document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
+    document.getElementById('btn-open-admin').addEventListener('click', () => document.getElementById('admin-modal').classList.remove('hidden'));
     document.getElementById('btn-close-admin').addEventListener('click', closeAllModals);
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
-    document.getElementById('btn-export-json').addEventListener('click', exportJSON);
+    document.getElementById('btn-export-json').addEventListener('click', () => downloadJSON(database, 'banco_completo'));
+    document.getElementById('tab-trigger-manage').addEventListener('click', renderCrudManager);
     
     document.getElementById('btn-close-player').addEventListener('click', () => {
         if(ytPlayer) ytPlayer.stopVideo();
         document.getElementById('player-container').classList.add('hidden');
     });
-
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-            e.target.classList.add('active');
-            document.getElementById(e.target.dataset.tab).classList.remove('hidden');
-        });
-    });
 }
 
-function closeAllModals() {
-    document.getElementById('admin-modal').classList.add('hidden');
-}
+function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
+
+window.onload = checkSession;
