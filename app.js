@@ -146,8 +146,6 @@ function renderMosaic() {
         document.getElementById('bc-search').classList.remove('hidden');
         lastYtSearchResults.forEach(item => {
             const isPlaylist = item.type === 'playlist';
-            
-            // MODIFICADO: Passa o status 'isPlaylist' para customizar o texto do botão interno do card
             const card = createCard(item.title, item.thumb, true, isPlaylist, null);
             card.querySelector('.add-music-badge').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -158,7 +156,6 @@ function renderMosaic() {
     }
 }
 
-// MODIFICADO: A função agora renderiza "Add Playlist" dinamicamente com base no parâmetro isPlaylist
 function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback) {
     const card = document.createElement('div');
     card.className = 'card';
@@ -413,7 +410,7 @@ function onPlayerStateChange(event) {
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD
+// 6. COMPONENTE CRUD (RESOLVIDO)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
@@ -574,6 +571,7 @@ async function saveMediaToDatabase() {
     renderMosaic();
 }
 
+// CORREÇÃO CRÍTICA DE CHAVEAMENTO DE ABAS UNIFICADO (EVITA CONCORRÊNCIA E TRAVAMENTO)
 function switchTabs(targetTabId, activeTriggerBtnId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -583,7 +581,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS
+// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -614,18 +612,24 @@ function setupEventListeners() {
     document.getElementById('btn-save-media').addEventListener('click', saveMediaToDatabase);
     document.getElementById('btn-export-json').addEventListener('click', () => downloadJSON(database, 'banco_completo'));
     
-    document.getElementById('tab-trigger-manage').addEventListener('click', () => {
+    // CORREÇÃO: Removido o loop repetitivo por classe (.tab-btn) que causava duplo escopo e travamento
+    document.getElementById('tab-trigger-manage').onclick = (e) => {
+        e.preventDefault();
         switchTabs('manage-tab', 'tab-trigger-manage');
         renderCrudManager();
-    });
-    document.getElementById('tab-trigger-add').addEventListener('click', () => {
+    };
+
+    document.getElementById('tab-trigger-add').onclick = (e) => {
+        e.preventDefault();
         switchTabs('add-tab', 'tab-trigger-add');
-    });
+    };
     
     document.getElementById('btn-close-player').addEventListener('click', () => {
         if(ytPlayer) ytPlayer.stopVideo();
         document.getElementById('player-container').classList.add('hidden');
     });
 }
+
+function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 window.onload = checkSession;
