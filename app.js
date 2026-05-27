@@ -206,7 +206,7 @@ function renderSidebar() {
                 currentView = 'tracks';
                 renderMosaic();
                 
-                // Fecha automaticamente a barra lateral em aparelhos mobile após selecionar a subcategoria
+                // Fecha automaticamente no mobile ao escolher uma subcategoria
                 if(window.innerWidth <= 768) {
                     const sidebar = document.getElementById('sidebar');
                     sidebar.classList.remove('open');
@@ -615,6 +615,20 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
     document.getElementById(targetTabId).classList.remove('hidden');
 }
 
+// ADICIONADO: Função unificada e blindada para alternar o menu lateral em telas desktop e mobile
+function handleToggleSidebar(e) {
+    if(e) { e.preventDefault(); e.stopPropagation(); }
+    const sidebar = document.getElementById('sidebar');
+    
+    if (sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+        sidebar.classList.add('collapsed');
+    } else {
+        sidebar.classList.remove('collapsed');
+        sidebar.classList.add('open');
+    }
+}
+
 // ==========================================
 // CONFIGURAÇÃO DOS GATILHOS
 // ==========================================
@@ -629,11 +643,10 @@ function setupEventListeners() {
 
     document.getElementById('btn-fetch-manual').addEventListener('click', fetchManualLinkData);
 
-    document.getElementById('toggle-sidebar').addEventListener('click', () => {
-        const sidebar = document.getElementById('sidebar');
-        sidebar.classList.toggle('collapsed');
-        sidebar.classList.toggle('open');
-    });
+    // CORREÇÃO: Escuta tanto cliques convencionais quanto toques de toque (touchstart) rápidos para mobile
+    const toggleBtn = document.getElementById('toggle-sidebar');
+    toggleBtn.addEventListener('click', handleToggleSidebar);
+    toggleBtn.addEventListener('touchstart', handleToggleSidebar, { passive: false });
     
     document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
     
@@ -680,7 +693,5 @@ function setupEventListeners() {
         document.getElementById('player-container').classList.add('hidden');
     };
 }
-
-function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 window.onload = checkSession;
