@@ -6,7 +6,6 @@ const CONFIG = {
     FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/musicas.json" 
 };
 
-// REESTRUTURADO: Banco de dados unificado como Array Linear compativel com seu novo formato
 let database = [
     {
         capa: "https://img.youtube.com/vi/4p0Mv3NIdS4/0.jpg",
@@ -76,7 +75,6 @@ function initApp() {
         .then(res => res.json())
         .then(data => { 
             if(data) {
-                // Força conversão para array caso o Firebase retorne objeto indexado
                 database = Array.isArray(data) ? data : Object.values(data);
             } 
         })
@@ -88,7 +86,6 @@ function initApp() {
         });
 }
 
-// Auxiliar auxiliar para converter links variados em IDs puros do YouTube
 function extractYoutubeId(url) {
     if(!url) return "";
     if(url.includes('embed/')) {
@@ -110,7 +107,6 @@ function renderMosaic() {
     document.getElementById('bc-subcategory').classList.add('hidden');
     document.getElementById('bc-search').classList.add('hidden');
 
-    // Agrupamento em tempo de execução para manter a interface idêntica
     if (currentView === 'categories') {
         const categories = [...new Set(database.map(item => item.categoria))];
         categories.forEach(cat => {
@@ -394,6 +390,36 @@ function renderCrudManager() {
     });
 }
 
+// ADICIONADO: Função unificada que processa e valida um Array ou Objeto JSON importado (via texto ou arquivo)
+function processImportedList(list) {
+    if (list.length > 0 && (list[0].link || list[0].link === "")) {
+        if (confirm(`Deseja mesclar estes ${list.length} itens com as suas mídias atuais?`)) {
+            database = database.concat(list);
+            saveState();
+            alert("JSON processado e salvo com sucesso no Firebase!");
+            document.getElementById('import-json-code').value = ''; // Limpa textarea
+        }
+    } else {
+        alert("O formato do JSON não obedece a estrutura padrão do projeto (falta a chave 'link').");
+    }
+}
+
+// ADICIONADO: Função que captura o código bruto colado na textarea
+function handleJSONCodeImport(e) {
+    if(e) { e.preventDefault(); e.stopPropagation(); }
+    const rawCode = document.getElementById('import-json-code').value.trim();
+    if(!rawCode) return alert("Cole o código JSON antes de processar.");
+
+    try {
+        const parsed = JSON.parse(rawCode);
+        // Aceita tanto um objeto único quanto uma lista em lote [ ... ]
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        processImportedList(list);
+    } catch(err) {
+        alert("Erro de sintaxe no JSON. Verifique se copiou o código completo com todas as chaves e aspas.");
+    }
+}
+
 function handleJSONImport(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -402,14 +428,8 @@ function handleJSONImport(event) {
         try {
             const imported = JSON.parse(e.target.result);
             const list = Array.isArray(imported) ? imported : Object.values(imported);
-            if (list.length > 0 && list[0].link) {
-                if (confirm("Mesclar dados importados?")) {
-                    database = database.concat(list);
-                    saveState();
-                    alert("Dados importados com sucesso!");
-                }
-            } else { alert("Formato inválido."); }
-        } catch (err) { alert("Erro de leitura."); }
+            processImportedList(list);
+        } catch (err) { alert("Erro de leitura do arquivo JSON."); }
     };
     reader.readAsText(file);
 }
@@ -457,7 +477,6 @@ async function saveMediaToDatabase(e) {
             }
         } catch(err) { console.error(err); }
     } else {
-        // COMPATIBILIDADE VISADA: Salva exatamente obedecendo o seu novo padrão
         database.push({
             capa: thumb,
             categoria: cat,
@@ -496,7 +515,7 @@ function handleToggleSidebar(e) {
 function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS POINTERDOWN)
+// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -517,6 +536,9 @@ function setupEventListeners() {
     document.getElementById('btn-export-json').onpointerdown = (e) => { e.preventDefault(); downloadJSON(database, 'banco_completo'); };
     document.getElementById('btn-trigger-import').onpointerdown = (e) => { e.preventDefault(); document.getElementById('import-json-file').click(); };
     document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
+
+    // ADICIONADO: Gatilho blindado para processar o código de texto JSON colado
+    document.getElementById('btn-process-code').onpointerdown = (e) => handleJSONCodeImport(e);
 
     document.getElementById('tab-trigger-manage').onpointerdown = (e) => {
         e.preventDefault(); switchTabs('manage-tab', 'tab-trigger-manage'); renderCrudManager();
