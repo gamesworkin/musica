@@ -166,7 +166,7 @@ function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, cl
     let htmlContent = `<img src="${imgSrc}"><h4>${title}</h4>`;
     if(isPlaylist) htmlContent += `<span class="media-type-badge"><i class="fas fa-list"></i> Playlist</span>`;
     if(showAddButton) {
-        const btnText = isPlaylist ? "Add Playlist" : "Add";
+        const btnText = isPlaylist ? "Adicionar Playlist" : "Adicionar";
         htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> ${btnText}</button>`;
     }
     card.innerHTML = htmlContent;
@@ -242,7 +242,7 @@ async function searchYouTubeGlobal(query) {
                     type: isPl ? 'playlist' : 'video',
                     youtubeId: isPl ? item.id.playlistId : item.id.videoId,
                     title: item.snippet.title,
-                    thumb: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : 'https://placehold.co/300x200?text=Sem+Thumb',
+                    thumb: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : 'https://placehold.co/300x200?text=Sem+Capa',
                     channel: item.snippet.channelTitle
                 });
             });
@@ -357,24 +357,23 @@ function playTrack(index) {
 }
 
 // ==========================================
-// 6. NOVO COMPONENTE CRUD EM ÁRVORE HIERÁRQUICA COMPLETA
+// 6. COMPONENTE CRUD EM ÁRVORE HIERÁRQUICA (TOTALMENTE EM PORTUGUÊS)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
     listContainer.innerHTML = '';
 
     if (database.length === 0) {
-        listContainer.innerHTML = '<p style="color: #666; padding: 1rem;">Banco vazio.</p>';
+        listContainer.innerHTML = '<p style="color: #666; padding: 1rem;">Banco de dados vazio.</p>';
         return;
     }
 
-    // Mapeamento dinâmico do Array Linear para estruturar a árvore visual
     const categories = [...new Set(database.map(item => item.categoria))];
 
     categories.forEach(cat => {
         if(!cat) return;
         // Linha da Categoria
-        listContainer.appendChild(createCrudRow(cat, 'category', () => {
+        listContainer.appendChild(createCrudRow(cat, 'categoria', () => {
             let novo = prompt("Novo nome para a Categoria:", cat);
             if(novo && novo.trim() !== "" && novo.trim() !== cat) {
                 database.forEach(item => { if(item.categoria === cat) item.categoria = novo.trim(); });
@@ -390,12 +389,11 @@ function renderCrudManager() {
             downloadJSON(bloco, `categoria_${cat}`);
         }));
 
-        // Varre Subcategorias deste grupo
         const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
         subcategories.forEach(sub => {
             if(!sub) return;
             // Linha da Subcategoria
-            listContainer.appendChild(createCrudRow(sub, 'subcategory', () => {
+            listContainer.appendChild(createCrudRow(sub, 'subcategoria', () => {
                 let novo = prompt(`Novo nome para a Subcategoria [${cat} > ${sub}]:`, sub);
                 if(novo && novo.trim() !== "" && novo.trim() !== sub) {
                     database.forEach(item => { if(item.categoria === cat && item.subcategoria === sub) item.subcategoria = novo.trim(); });
@@ -411,13 +409,35 @@ function renderCrudManager() {
                 downloadJSON(bloco, `sub_cat_${sub}`);
             }));
 
-            // Varre as Mídias/Músicas deste subgrupo
+            // Varre as Mídias
             database.forEach((item, idx) => {
                 if(item.categoria === cat && item.subcategoria === sub) {
-                    // Linha da Mídia individual
-                    listContainer.appendChild(createCrudRow(item.título, 'track', () => {
-                        let novo = prompt("Novo título para este vídeo:", item.título);
-                        if(novo && novo.trim() !== "") { database[idx].título = novo.trim(); saveState(); }
+                    // MODIFICADO: Sistema de edição avançada multivariável para vídeos individuais
+                    listContainer.appendChild(createCrudRow(item.título, 'musica', () => {
+                        let novoTitulo = prompt("Alterar Título:", item.título);
+                        if(novoTitulo === null) return; // Cancela operação completa se fechar o prompt
+                        
+                        let novoLink = prompt("Alterar Link Embed / URL:", item.link);
+                        if(novoLink === null) return;
+
+                        let novaCapa = prompt("Alterar URL da Capa (Thumbnail):", item.capa);
+                        if(novaCapa === null) return;
+
+                        let novaCat = prompt("Mover para qual Categoria?", item.categoria);
+                        if(novaCat === null) return;
+
+                        let novaSub = prompt("Mover para qual Subcategoria?", item.subcategoria);
+                        if(novaSub === null) return;
+
+                        // Aplica as novas variáveis editadas de forma segura e limpa
+                        database[idx].título = novoTitulo.trim() || item.título;
+                        database[idx].link = novoLink.trim() || item.link;
+                        database[idx].capa = novaCapa.trim() || item.capa;
+                        database[idx].categoria = novaCat.trim() || item.categoria;
+                        database[idx].subcategoria = novaSub.trim() || item.subcategoria;
+
+                        saveState();
+                        alert("Mídia atualizada com sucesso!");
                     }, () => {
                         if(confirm(`Excluir o vídeo "${item.título}"?`)) { database.splice(idx, 1); saveState(); }
                     }, () => {
@@ -431,12 +451,12 @@ function renderCrudManager() {
 
 function createCrudRow(title, type, onEdit, onDel, onExp) {
     const row = document.createElement('div');
-    row.className = `crud-item ${type === 'subcategory' ? 'sub-level' : type === 'track' ? 'track-level' : ''}`;
+    row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'musica' ? 'track-level' : ''}`;
     row.innerHTML = `<span><strong>[${type.toUpperCase()}]</strong> ${title}</span>
         <div class="crud-actions">
-            <button class="crud-btn btn-edit" title="Editar Nome"><i class="fas fa-edit"></i></button>
+            <button class="crud-btn btn-edit" title="Editar Dados"><i class="fas fa-edit"></i></button>
             <button class="crud-btn btn-del" title="Excluir"><i class="fas fa-trash"></i></button>
-            <button class="crud-btn btn-exp" title="Exportar Bloco JSON"><i class="fas fa-download"></i></button>
+            <button class="crud-btn btn-exp" title="Exportar JSON"><i class="fas fa-download"></i></button>
         </div>`;
         
     row.querySelector('.btn-edit').onclick = (e) => { e.preventDefault(); onEdit(); };
