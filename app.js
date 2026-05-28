@@ -97,7 +97,7 @@ function extractYoutubeId(url) {
 }
 
 // ==========================================
-// 2. RENDERIZAÇÃO DINÂMICA (MOSAICOS)
+// 2. RENDERIZAÇÃO DOS MOSAICOS (GRID)
 // ==========================================
 function renderMosaic() {
     const grid = document.getElementById('mosaic-grid');
@@ -357,7 +357,7 @@ function playTrack(index) {
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD GERAL (ARRAY LINEAR)
+// 6. NOVO COMPONENTE CRUD EM ÁRVORE HIERÁRQUICA COMPLETA
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
@@ -368,56 +368,103 @@ function renderCrudManager() {
         return;
     }
 
-    database.forEach((item, idx) => {
-        const row = document.createElement('div');
-        row.className = 'crud-item';
-        row.innerHTML = `<span><strong>[${item.categoria} > ${item.subcategoria}]</strong> ${item.título}</span>
-            <div class="crud-actions">
-                <button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>
-                <button class="crud-btn btn-del"><i class="fas fa-trash"></i></button>
-            </div>`;
-            
-        row.querySelector('.btn-edit').onclick = (e) => {
-            e.preventDefault();
-            let novo = prompt("Novo título:", item.título);
-            if(novo && novo.trim() !== "") { database[idx].título = novo.trim(); saveState(); }
-        };
-        row.querySelector('.btn-del').onclick = (e) => {
-            e.preventDefault();
-            if(confirm(`Excluir "${item.título}"?`)) { database.splice(idx, 1); saveState(); }
-        };
-        listContainer.appendChild(row);
+    // Mapeamento dinâmico do Array Linear para estruturar a árvore visual
+    const categories = [...new Set(database.map(item => item.categoria))];
+
+    categories.forEach(cat => {
+        if(!cat) return;
+        // Linha da Categoria
+        listContainer.appendChild(createCrudRow(cat, 'category', () => {
+            let novo = prompt("Novo nome para a Categoria:", cat);
+            if(novo && novo.trim() !== "" && novo.trim() !== cat) {
+                database.forEach(item => { if(item.categoria === cat) item.categoria = novo.trim(); });
+                saveState();
+            }
+        }, () => {
+            if(confirm(`Excluir toda a categoria "${cat}" e suas mídias?`)) {
+                database = database.filter(item => item.categoria !== cat);
+                saveState();
+            }
+        }, () => {
+            const bloco = database.filter(item => item.categoria === cat);
+            downloadJSON(bloco, `categoria_${cat}`);
+        }));
+
+        // Varre Subcategorias deste grupo
+        const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
+        subcategories.forEach(sub => {
+            if(!sub) return;
+            // Linha da Subcategoria
+            listContainer.appendChild(createCrudRow(sub, 'subcategory', () => {
+                let novo = prompt(`Novo nome para a Subcategoria [${cat} > ${sub}]:`, sub);
+                if(novo && novo.trim() !== "" && novo.trim() !== sub) {
+                    database.forEach(item => { if(item.categoria === cat && item.subcategoria === sub) item.subcategoria = novo.trim(); });
+                    saveState();
+                }
+            }, () => {
+                if(confirm(`Excluir toda a subcategoria "${sub}" deste grupo?`)) {
+                    database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
+                    saveState();
+                }
+            }, () => {
+                const bloco = database.filter(item => item.categoria === cat && item.subcategoria === sub);
+                downloadJSON(bloco, `sub_cat_${sub}`);
+            }));
+
+            // Varre as Mídias/Músicas deste subgrupo
+            database.forEach((item, idx) => {
+                if(item.categoria === cat && item.subcategoria === sub) {
+                    // Linha da Mídia individual
+                    listContainer.appendChild(createCrudRow(item.título, 'track', () => {
+                        let novo = prompt("Novo título para este vídeo:", item.título);
+                        if(novo && novo.trim() !== "") { database[idx].título = novo.trim(); saveState(); }
+                    }, () => {
+                        if(confirm(`Excluir o vídeo "${item.título}"?`)) { database.splice(idx, 1); saveState(); }
+                    }, () => {
+                        downloadJSON(item, `video_${item.título}`);
+                    }));
+                }
+            });
+        });
     });
 }
 
-// ADICIONADO: Função unificada que processa e valida um Array ou Objeto JSON importado (via texto ou arquivo)
-function processImportedList(list) {
-    if (list.length > 0 && (list[0].link || list[0].link === "")) {
-        if (confirm(`Deseja mesclar estes ${list.length} itens com as suas mídias atuais?`)) {
-            database = database.concat(list);
-            saveState();
-            alert("JSON processado e salvo com sucesso no Firebase!");
-            document.getElementById('import-json-code').value = ''; // Limpa textarea
-        }
-    } else {
-        alert("O formato do JSON não obedece a estrutura padrão do projeto (falta a chave 'link').");
-    }
+function createCrudRow(title, type, onEdit, onDel, onExp) {
+    const row = document.createElement('div');
+    row.className = `crud-item ${type === 'subcategory' ? 'sub-level' : type === 'track' ? 'track-level' : ''}`;
+    row.innerHTML = `<span><strong>[${type.toUpperCase()}]</strong> ${title}</span>
+        <div class="crud-actions">
+            <button class="crud-btn btn-edit" title="Editar Nome"><i class="fas fa-edit"></i></button>
+            <button class="crud-btn btn-del" title="Excluir"><i class="fas fa-trash"></i></button>
+            <button class="crud-btn btn-exp" title="Exportar Bloco JSON"><i class="fas fa-download"></i></button>
+        </div>`;
+        
+    row.querySelector('.btn-edit').onclick = (e) => { e.preventDefault(); onEdit(); };
+    row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); onDel(); };
+    row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); onExp(); };
+    return row;
 }
 
-// ADICIONADO: Função que captura o código bruto colado na textarea
+function processImportedList(list) {
+    if (list.length > 0) {
+        if (confirm(`Deseja mesclar estes itens com as suas mídias atuais?`)) {
+            database = database.concat(list);
+            saveState();
+            alert("Dados processados e salvos com sucesso no Firebase!");
+            document.getElementById('import-json-code').value = ''; 
+        }
+    } else { alert("Formato inválido."); }
+}
+
 function handleJSONCodeImport(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
     const rawCode = document.getElementById('import-json-code').value.trim();
     if(!rawCode) return alert("Cole o código JSON antes de processar.");
-
     try {
         const parsed = JSON.parse(rawCode);
-        // Aceita tanto um objeto único quanto uma lista em lote [ ... ]
         const list = Array.isArray(parsed) ? parsed : [parsed];
         processImportedList(list);
-    } catch(err) {
-        alert("Erro de sintaxe no JSON. Verifique se copiou o código completo com todas as chaves e aspas.");
-    }
+    } catch(err) { alert("Erro de sintaxe no código JSON."); }
 }
 
 function handleJSONImport(event) {
@@ -440,10 +487,11 @@ function saveState() {
 }
 
 function downloadJSON(obj, filename) {
+    const cleanFilename = filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
     const a = document.createElement('a');
     a.setAttribute("href", dataStr);
-    a.setAttribute("download", `${filename}_backup.json`);
+    a.setAttribute("download", `${cleanFilename}_backup.json`);
     document.body.appendChild(a);
     a.click(); a.remove();
 }
@@ -515,7 +563,7 @@ function handleToggleSidebar(e) {
 function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
+// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS POINTERDOWN)
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
@@ -536,8 +584,6 @@ function setupEventListeners() {
     document.getElementById('btn-export-json').onpointerdown = (e) => { e.preventDefault(); downloadJSON(database, 'banco_completo'); };
     document.getElementById('btn-trigger-import').onpointerdown = (e) => { e.preventDefault(); document.getElementById('import-json-file').click(); };
     document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
-
-    // ADICIONADO: Gatilho blindado para processar o código de texto JSON colado
     document.getElementById('btn-process-code').onpointerdown = (e) => handleJSONCodeImport(e);
 
     document.getElementById('tab-trigger-manage').onpointerdown = (e) => {
