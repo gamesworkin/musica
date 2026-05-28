@@ -23,6 +23,7 @@ let currentPlaylist = [];
 let currentTrackIndex = 0;
 let ytPlayer = null;
 let lastYtSearchResults = []; 
+let activeEditingIndex = null; // Guarda o indice do video que esta sendo alterado no painel flutuante
 
 // ==========================================
 // 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS
@@ -357,7 +358,7 @@ function playTrack(index) {
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD EM ÁRVORE HIERÁRQUICA (TOTALMENTE EM PORTUGUÊS)
+// 6. COMPONENTE CRUD EM ÁRVORE HIERÁRQUICA
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
@@ -372,7 +373,7 @@ function renderCrudManager() {
 
     categories.forEach(cat => {
         if(!cat) return;
-        // Linha da Categoria
+        
         listContainer.appendChild(createCrudRow(cat, 'categoria', () => {
             let novo = prompt("Novo nome para a Categoria:", cat);
             if(novo && novo.trim() !== "" && novo.trim() !== cat) {
@@ -392,7 +393,7 @@ function renderCrudManager() {
         const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
         subcategories.forEach(sub => {
             if(!sub) return;
-            // Linha da Subcategoria
+
             listContainer.appendChild(createCrudRow(sub, 'subcategoria', () => {
                 let novo = prompt(`Novo nome para a Subcategoria [${cat} > ${sub}]:`, sub);
                 if(novo && novo.trim() !== "" && novo.trim() !== sub) {
@@ -412,32 +413,9 @@ function renderCrudManager() {
             // Varre as Mídias
             database.forEach((item, idx) => {
                 if(item.categoria === cat && item.subcategoria === sub) {
-                    // MODIFICADO: Sistema de edição avançada multivariável para vídeos individuais
+                    // RESOLVIDO DEFINITIVAMENTE: Agora abre o painel HTML flutuante nativo carregando as 5 chaves
                     listContainer.appendChild(createCrudRow(item.título, 'musica', () => {
-                        let novoTitulo = prompt("Alterar Título:", item.título);
-                        if(novoTitulo === null) return; // Cancela operação completa se fechar o prompt
-                        
-                        let novoLink = prompt("Alterar Link Embed / URL:", item.link);
-                        if(novoLink === null) return;
-
-                        let novaCapa = prompt("Alterar URL da Capa (Thumbnail):", item.capa);
-                        if(novaCapa === null) return;
-
-                        let novaCat = prompt("Mover para qual Categoria?", item.categoria);
-                        if(novaCat === null) return;
-
-                        let novaSub = prompt("Mover para qual Subcategoria?", item.subcategoria);
-                        if(novaSub === null) return;
-
-                        // Aplica as novas variáveis editadas de forma segura e limpa
-                        database[idx].título = novoTitulo.trim() || item.título;
-                        database[idx].link = novoLink.trim() || item.link;
-                        database[idx].capa = novaCapa.trim() || item.capa;
-                        database[idx].categoria = novaCat.trim() || item.categoria;
-                        database[idx].subcategoria = novaSub.trim() || item.subcategoria;
-
-                        saveState();
-                        alert("Mídia atualizada com sucesso!");
+                        openAdvancedEditModal(idx);
                     }, () => {
                         if(confirm(`Excluir o vídeo "${item.título}"?`)) { database.splice(idx, 1); saveState(); }
                     }, () => {
@@ -463,6 +441,46 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
     row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); onDel(); };
     row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); onExp(); };
     return row;
+}
+
+// CORREÇÃO CRÍTICA: Lógica que alimenta os inputs do novo modal de edição simultânea
+function openAdvancedEditModal(index) {
+    activeEditingIndex = index;
+    const item = database[index];
+
+    document.getElementById('edit-field-title').value = item.título || "";
+    document.getElementById('edit-field-link').value = item.link || "";
+    document.getElementById('edit-field-capa').value = item.capa || "";
+    document.getElementById('edit-field-category').value = item.categoria || "";
+    document.getElementById('edit-field-subcategory').value = item.subcategoria || "";
+
+    document.getElementById('edit-media-modal').classList.remove('hidden');
+}
+
+function saveAdvancedEditChanges(e) {
+    if(e) { e.preventDefault(); e.stopPropagation(); }
+    if(activeEditingIndex === null) return;
+
+    const t = document.getElementById('edit-field-title').value.trim();
+    const l = document.getElementById('edit-field-link').value.trim();
+    const c = document.getElementById('edit-field-capa').value.trim();
+    const cat = document.getElementById('edit-field-category').value.trim();
+    const sub = document.getElementById('edit-field-subcategory').value.trim();
+
+    if(!t || !l || !c || !cat || !sub) {
+        return alert("Todos os 5 campos devem estar preenchidos!");
+    }
+
+    // Salva as 5 variáveis no objeto dentro do array original
+    database[activeEditingIndex].título = t;
+    database[activeEditingIndex].link = l;
+    database[activeEditingIndex].capa = c;
+    database[activeEditingIndex].categoria = cat;
+    database[activeEditingIndex].subcategoria = sub;
+
+    document.getElementById('edit-media-modal').classList.add('hidden');
+    activeEditingIndex = null;
+    saveState();
 }
 
 function processImportedList(list) {
@@ -506,6 +524,7 @@ function saveState() {
         .then(() => { renderSidebar(); renderMosaic(); renderCrudManager(); });
 }
 
+// Garante exportações em lote compatíveis com o seu modelo enviado
 function downloadJSON(obj, filename) {
     const cleanFilename = filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
@@ -605,6 +624,14 @@ function setupEventListeners() {
     document.getElementById('btn-trigger-import').onpointerdown = (e) => { e.preventDefault(); document.getElementById('import-json-file').click(); };
     document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
     document.getElementById('btn-process-code').onpointerdown = (e) => handleJSONCodeImport(e);
+
+    // Ouvintes dedicados ao novo modal de edicao avancada
+    document.getElementById('btn-submit-edit-media').onpointerdown = (e) => saveAdvancedEditChanges(e);
+    document.getElementById('btn-cancel-edit-media').onpointerdown = (e) => {
+        e.preventDefault();
+        document.getElementById('edit-media-modal').classList.add('hidden');
+        activeEditingIndex = null;
+    };
 
     document.getElementById('tab-trigger-manage').onpointerdown = (e) => {
         e.preventDefault(); switchTabs('manage-tab', 'tab-trigger-manage'); renderCrudManager();
