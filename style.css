@@ -167,14 +167,8 @@ button:hover { background: var(--accent-hover); }
         transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     
-    /* Chaveamento preciso via CSS puro controlado por classe única */
-    .sidebar.open { 
-        transform: translateX(0) !important; 
-    }
-    
-    .sidebar.collapsed { 
-        transform: translateX(-100%) !important; 
-    }
+    .sidebar.open { transform: translateX(0) !important; }
+    .sidebar.collapsed { transform: translateX(-100%) !important; }
     
     .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
     .backup-actions { flex-direction: column; gap: 0; }
