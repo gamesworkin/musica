@@ -23,7 +23,7 @@ let currentPlaylist = [];
 let currentTrackIndex = 0;
 let ytPlayer = null;
 let lastYtSearchResults = []; 
-let activeEditingIndex = null; // Guarda o indice do video que esta sendo alterado no painel flutuante
+let activeEditingIndex = null;
 
 // ==========================================
 // 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS
@@ -94,7 +94,7 @@ function extractYoutubeId(url) {
     }
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
-    return (match && match[2].length == 11) ? match[2] : url;
+    return (match && match[2].length == 11) ? match[2] : "";
 }
 
 // ==========================================
@@ -285,6 +285,15 @@ async function fetchManualLinkData(e) {
     const url = document.getElementById('manual-media-url').value.trim();
     if(!url) return alert("Cole uma URL válida.");
 
+    // Se nao for link do Youtube, pula a busca na API do Youtube e permite criar dados padrao direto
+    if(!url.includes("youtube.com") && !url.includes("youtu.be")) {
+        document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Externo";
+        document.getElementById('prev-title').value = "Vídeo de Site Externo";
+        document.getElementById('prev-title').dataset.videoid = url;
+        document.getElementById('prev-title').dataset.mediatype = 'externo';
+        return;
+    }
+
     document.getElementById('btn-fetch-manual').innerText = "Buscando...";
     let isPlaylist = url.includes('list=');
     let targetId = isPlaylist ? new URLSearchParams(new URL(url).search).get('list') : extractYoutubeId(url);
@@ -335,25 +344,46 @@ function filterInternalDatabase(query) {
 }
 
 // ==========================================
-// 5. CONTROLE DO PLAYER INTEGRADO
+// 5. CHAVEAMENTO AUTOMÁTICO DE REPRODUTORES (YOUTUBE VS UNIVERSAL)
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return;
     currentTrackIndex = index;
     const track = currentPlaylist[index];
-    const vId = extractYoutubeId(track.link);
 
     document.getElementById('player-container').classList.remove('hidden');
     document.getElementById('current-track-title').innerText = track.título;
 
-    if (!ytPlayer) {
-        ytPlayer = new YT.Player('yt-player', {
-            videoId: vId,
-            playerVars: { 'autoplay': 1, 'playsinline': 1 },
-            events: { 'onStateChange': (e) => { if(e.data === 0 && currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); } }
-        });
+    const ytPlayerEl = document.getElementById('yt-player');
+    const univPlayerEl = document.getElementById('universal-player');
+
+    // Verifica se o link pertence ao ecossistema do YouTube
+    if(track.link.includes('youtube.com') || track.link.includes('youtu.be')) {
+        // Ativa modo YouTube e esconde o universal
+        univPlayerEl.classList.add('hidden');
+        univPlayerEl.src = ""; // Reseta player universal
+        ytPlayerEl.classList.remove('hidden');
+
+        const vId = extractYoutubeId(track.link);
+        if (!ytPlayer) {
+            ytPlayer = new YT.Player('yt-player', {
+                videoId: vId,
+                playerVars: { 'autoplay': 1, 'playsinline': 1 },
+                events: { 'onStateChange': (e) => { if(e.data === 0 && currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); } }
+            });
+        } else {
+            ytPlayer.loadVideoById(vId);
+        }
     } else {
-        ytPlayer.loadVideoById(vId);
+        // LINK DE OUTRO SITE: Pausa o YouTube se ele existir e ativa o Player Universal
+        if(ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
+            try { ytPlayer.pauseVideo(); } catch(err){}
+        }
+        ytPlayerEl.classList.add('hidden');
+        
+        // Alimenta e exibe o reprodutor universal
+        univPlayerEl.classList.remove('hidden');
+        univPlayerEl.src = track.link;
     }
 }
 
@@ -410,10 +440,8 @@ function renderCrudManager() {
                 downloadJSON(bloco, `sub_cat_${sub}`);
             }));
 
-            // Varre as Mídias
             database.forEach((item, idx) => {
                 if(item.categoria === cat && item.subcategoria === sub) {
-                    // RESOLVIDO DEFINITIVAMENTE: Agora abre o painel HTML flutuante nativo carregando as 5 chaves
                     listContainer.appendChild(createCrudRow(item.título, 'musica', () => {
                         openAdvancedEditModal(idx);
                     }, () => {
@@ -443,7 +471,6 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
     return row;
 }
 
-// CORREÇÃO CRÍTICA: Lógica que alimenta os inputs do novo modal de edição simultânea
 function openAdvancedEditModal(index) {
     activeEditingIndex = index;
     const item = database[index];
@@ -471,7 +498,6 @@ function saveAdvancedEditChanges(e) {
         return alert("Todos os 5 campos devem estar preenchidos!");
     }
 
-    // Salva as 5 variáveis no objeto dentro do array original
     database[activeEditingIndex].título = t;
     database[activeEditingIndex].link = l;
     database[activeEditingIndex].capa = c;
@@ -524,7 +550,6 @@ function saveState() {
         .then(() => { renderSidebar(); renderMosaic(); renderCrudManager(); });
 }
 
-// Garante exportações em lote compatíveis com o seu modelo enviado
 function downloadJSON(obj, filename) {
     const cleanFilename = filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
@@ -563,14 +588,11 @@ async function saveMediaToDatabase(e) {
                 });
             }
         } catch(err) { console.error(err); }
+    } else if (mediaType === 'externo') {
+        // Adiciona midias externas diretamente usando a URL crua
+        database.push({ capa: thumb, categoria: cat, subcategoria: sub, título: title, link: idOrList });
     } else {
-        database.push({
-            capa: thumb,
-            categoria: cat,
-            subcategoria: sub,
-            título: title,
-            link: `https://www.youtube.com/embed/${idOrList}`
-        });
+        database.push({ capa: thumb, categoria: cat, subcategoria: sub, título: title, link: `https://www.youtube.com/embed/${idOrList}` });
     }
 
     saveState();
@@ -625,19 +647,22 @@ function setupEventListeners() {
     document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
     document.getElementById('btn-process-code').onpointerdown = (e) => handleJSONCodeImport(e);
 
-    // Ouvintes dedicados ao novo modal de edicao avancada
     document.getElementById('btn-submit-edit-media').onpointerdown = (e) => saveAdvancedEditChanges(e);
     document.getElementById('btn-cancel-edit-media').onpointerdown = (e) => {
-        e.preventDefault();
-        document.getElementById('edit-media-modal').classList.add('hidden');
-        activeEditingIndex = null;
+        e.preventDefault(); document.getElementById('edit-media-modal').classList.add('hidden'); activeEditingIndex = null;
     };
 
     document.getElementById('tab-trigger-manage').onpointerdown = (e) => {
         e.preventDefault(); switchTabs('manage-tab', 'tab-trigger-manage'); renderCrudManager();
     };
     document.getElementById('tab-trigger-add').onpointerdown = (e) => { e.preventDefault(); switchTabs('add-tab', 'tab-trigger-add'); };
-    document.getElementById('btn-close-player').onpointerdown = (e) => { e.preventDefault(); if(ytPlayer) ytPlayer.stopVideo(); document.getElementById('player-container').classList.add('hidden'); };
+    
+    document.getElementById('btn-close-player').onpointerdown = (e) => {
+        e.preventDefault();
+        if(ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(err){} }
+        document.getElementById('universal-player').src = ""; // Corta o audio/video externo imediatamente
+        document.getElementById('player-container').classList.add('hidden');
+    };
 }
 
 window.onload = checkSession;
