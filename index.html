@@ -60,7 +60,9 @@
 
                 <div id="player-container" class="player-container hidden">
                     <div class="video-wrapper">
-                        <div id="yt-player"></div>
+                        <div id="yt-player" class="hidden"></div>
+                        
+                        <iframe id="universal-player" class="hidden" allowfullscreen allow="autoplay; encrypted-media"></iframe>
                     </div>
                     <div class="player-info">
                         <h4 id="current-track-title">Nenhuma música reproduzindo</h4>
@@ -88,7 +90,7 @@
 
             <div id="add-tab" class="tab-content">
                 <div class="form-group row">
-                    <input type="text" id="manual-media-url" placeholder="Cole aqui a URL do Vídeo ou da Playlist do YouTube">
+                    <input type="text" id="manual-media-url" placeholder="Cole aqui a URL de qualquer site (YouTube, Vimeo, etc.)">
                     <button id="btn-fetch-manual" class="accent-btn" style="width: auto; white-space: nowrap; margin: 0;">Capturar Dados</button>
                 </div>
                 
@@ -130,11 +132,11 @@
                 <input type="text" id="edit-field-title">
             </div>
             <div class="form-group" style="margin-bottom: 0.5rem;">
-                <label style="font-size: 0.85rem; color: var(--text-muted);">Link Incorporado (Embed):</label>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">Link Incorporado (Embed) ou URL Direta:</label>
                 <input type="text" id="edit-field-link">
             </div>
             <div class="form-group" style="margin-bottom: 0.5rem;">
-                <label style="font-size: 0.85rem; color: var(--text-muted);">URL da Capa (Capa):</label>
+                <label style="font-size: 0.85rem; color: var(--text-muted);">URL da Capa:</label>
                 <input type="text" id="edit-field-capa">
             </div>
             <div class="form-group" style="margin-bottom: 0.5rem;">
