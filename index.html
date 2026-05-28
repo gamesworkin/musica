@@ -106,9 +106,16 @@
             <div id="manage-tab" class="tab-content hidden">
                 <div class="backup-actions">
                     <button id="btn-export-json" class="btn-secondary"><i class="fas fa-download"></i> Exportar Tudo (JSON)</button>
-                    <button id="btn-trigger-import" class="btn-secondary"><i class="fas fa-upload"></i> Importar Backup (JSON)</button>
+                    <button id="btn-trigger-import" class="btn-secondary"><i class="fas fa-upload"></i> Importar Arquivo (JSON)</button>
                     <input type="file" id="import-json-file" accept=".json" class="hidden">
                 </div>
+
+                <div class="import-code-container" style="margin-top: 1rem; text-align: left;">
+                    <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Ou cole o Código JSON abaixo:</label>
+                    <textarea id="import-json-code" placeholder='Exemplo: {"capa":"...","categoria":"...","link":"...","subcategoria":"...","título":"..."} ou um lote em [ ... ]' style="width: 100%; height: 80px; background: #333; color: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; font-family: monospace; font-size: 0.8rem; resize: vertical; outline: none;"></textarea>
+                    <button id="btn-process-code" class="btn-secondary" style="margin-top: 0.4rem; padding: 0.5rem; font-size: 0.85rem;"><i class="fas fa-code"></i> Processar Código JSON</button>
+                </div>
+
                 <div id="crud-tree-list" class="crud-list">
                     </div>
             </div>
