@@ -6,13 +6,16 @@ const CONFIG = {
     FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/musicas.json" 
 };
 
-let database = {
-    "Rock": {
-        "Nacionais": [
-            { id: "v_1", title: "Capital Inicial - Primeiros Erros", youtubeId: "4p0Mv3NIdS4", thumb: "https://img.youtube.com/vi/4p0Mv3NIdS4/0.jpg", channel: "Capital Inicial" }
-        ]
+// REESTRUTURADO: Banco de dados unificado como Array Linear compativel com seu novo formato
+let database = [
+    {
+        capa: "https://img.youtube.com/vi/4p0Mv3NIdS4/0.jpg",
+        categoria: "Rock",
+        subcategoria: "Nacionais",
+        título: "Capital Inicial - Primeiros Erros",
+        link: "https://www.youtube.com/embed/4p0Mv3NIdS4"
     }
-};
+];
 
 let currentView = 'categories'; 
 let selectedCategory = '';
@@ -23,14 +26,13 @@ let ytPlayer = null;
 let lastYtSearchResults = []; 
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS E LOGOUT
+// 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
     if (loginData) {
         const session = JSON.parse(loginData);
-        const twoHours = 2 * 60 * 60 * 1000;
-        if (Date.now() - session.timestamp < twoHours) {
+        if (Date.now() - session.timestamp < 2 * 60 * 60 * 1000) {
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-container').classList.remove('hidden');
             initApp();
@@ -52,10 +54,8 @@ document.getElementById('btn-logout').addEventListener('click', handleLogoutActi
 function handleLogin() {
     const inputUser = document.getElementById('login-user').value;
     const inputPass = document.getElementById('login-pass').value;
-    
     if (inputUser === CONFIG.ADMIN_USER && inputPass === CONFIG.ADMIN_PASSWORD) {
-        const sessionValue = { user: inputUser, timestamp: Date.now() };
-        localStorage.setItem('streamhub_session', JSON.stringify(sessionValue));
+        localStorage.setItem('streamhub_session', JSON.stringify({ user: inputUser, timestamp: Date.now() }));
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
         initApp();
@@ -69,14 +69,17 @@ function handleLogoutActions() {
     if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e){} }
     document.getElementById('app-container').classList.add('hidden');
     document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('login-user').value = '';
-    document.getElementById('login-pass').value = '';
 }
 
 function initApp() {
     fetch(CONFIG.FIREBASE_URL)
         .then(res => res.json())
-        .then(data => { if(data) database = data; })
+        .then(data => { 
+            if(data) {
+                // Força conversão para array caso o Firebase retorne objeto indexado
+                database = Array.isArray(data) ? data : Object.values(data);
+            } 
+        })
         .catch(e => console.log("Usando banco local padrão."))
         .finally(() => {
             renderSidebar();
@@ -85,8 +88,19 @@ function initApp() {
         });
 }
 
+// Auxiliar auxiliar para converter links variados em IDs puros do YouTube
+function extractYoutubeId(url) {
+    if(!url) return "";
+    if(url.includes('embed/')) {
+        return url.split('embed/')[1].split('?')[0];
+    }
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length == 11) ? match[2] : url;
+}
+
 // ==========================================
-// 2. RENDERIZAÇÃO DOS MOSAICOS (GRID)
+// 2. RENDERIZAÇÃO DINÂMICA (MOSAICOS)
 // ==========================================
 function renderMosaic() {
     const grid = document.getElementById('mosaic-grid');
@@ -96,14 +110,13 @@ function renderMosaic() {
     document.getElementById('bc-subcategory').classList.add('hidden');
     document.getElementById('bc-search').classList.add('hidden');
 
+    // Agrupamento em tempo de execução para manter a interface idêntica
     if (currentView === 'categories') {
-        Object.keys(database).forEach(cat => {
-            if (!database[cat] || Object.keys(database[cat]).length === 0) return;
-            const firstSub = Object.keys(database[cat])[0];
-            const firstTrack = database[cat][firstSub] ? database[cat][firstSub][0] : null;
-            const thumb = firstTrack ? firstTrack.thumb : 'https://placehold.co/300x200?text=Vazio';
-
-            grid.appendChild(createCard(cat, thumb, false, false, () => {
+        const categories = [...new Set(database.map(item => item.categoria))];
+        categories.forEach(cat => {
+            if(!cat) return;
+            const match = database.find(item => item.categoria === cat);
+            grid.appendChild(createCard(cat, match ? match.capa : '', false, false, () => {
                 selectedCategory = cat;
                 currentView = 'subcategories';
                 renderMosaic();
@@ -114,18 +127,15 @@ function renderMosaic() {
         document.getElementById('bc-category').classList.remove('hidden');
         document.getElementById('bc-category').querySelector('.txt').innerText = selectedCategory;
 
-        if(database[selectedCategory]) {
-            Object.keys(database[selectedCategory]).forEach(sub => {
-                const firstTrack = database[selectedCategory][sub][0];
-                const thumb = firstTrack ? firstTrack.thumb : 'https://placehold.co/300x200?text=Vazio';
-
-                grid.appendChild(createCard(sub, thumb, false, false, () => {
-                    selectedSubcategory = sub;
-                    currentView = 'tracks';
-                    renderMosaic();
-                }));
-            });
-        }
+        const subcategories = [...new Set(database.filter(item => item.categoria === selectedCategory).map(item => item.subcategoria))];
+        subcategories.forEach(sub => {
+            const match = database.find(item => item.categoria === selectedCategory && item.subcategoria === sub);
+            grid.appendChild(createCard(sub, match ? match.capa : '', false, false, () => {
+                selectedSubcategory = sub;
+                currentView = 'tracks';
+                renderMosaic();
+            }));
+        });
     } 
     else if (currentView === 'tracks') {
         document.getElementById('bc-category').classList.remove('hidden');
@@ -133,11 +143,9 @@ function renderMosaic() {
         document.getElementById('bc-subcategory').classList.remove('hidden');
         document.getElementById('bc-subcategory').querySelector('.txt').innerText = selectedSubcategory;
 
-        const tracks = database[selectedCategory][selectedSubcategory] || [];
-        currentPlaylist = tracks; 
-
-        tracks.forEach((track, index) => {
-            grid.appendChild(createCard(track.title, track.thumb, false, false, () => {
+        currentPlaylist = database.filter(item => item.categoria === selectedCategory && item.subcategoria === selectedSubcategory);
+        currentPlaylist.forEach((track, index) => {
+            grid.appendChild(createCard(track.título, track.capa, false, false, () => {
                 playTrack(index);
             }));
         });
@@ -148,8 +156,7 @@ function renderMosaic() {
             const isPlaylist = item.type === 'playlist';
             const card = createCard(item.title, item.thumb, true, isPlaylist, null);
             card.querySelector('.add-music-badge').onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 openAdminWithTrack(item);
             };
             grid.appendChild(card);
@@ -161,15 +168,11 @@ function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, cl
     const card = document.createElement('div');
     card.className = 'card';
     let htmlContent = `<img src="${imgSrc}"><h4>${title}</h4>`;
-    
-    if(isPlaylist) {
-        htmlContent += `<span class="media-type-badge"><i class="fas fa-list"></i> Playlist</span>`;
-    }
+    if(isPlaylist) htmlContent += `<span class="media-type-badge"><i class="fas fa-list"></i> Playlist</span>`;
     if(showAddButton) {
         const btnText = isPlaylist ? "Add Playlist" : "Add";
         htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> ${btnText}</button>`;
     }
-    
     card.innerHTML = htmlContent;
     if(clickCallback) card.addEventListener('click', clickCallback);
     return card;
@@ -182,21 +185,22 @@ function renderSidebar() {
     const tree = document.getElementById('sidebar-tree');
     tree.innerHTML = '';
 
-    Object.keys(database).forEach(cat => {
+    const categories = [...new Set(database.map(item => item.categoria))];
+    categories.forEach(cat => {
+        if(!cat) return;
         const catLi = document.createElement('li');
-        
         const catToggle = document.createElement('span');
         catToggle.className = 'category-toggle';
         catToggle.innerHTML = `<i class="fas fa-folder"></i> ${cat}`;
         
         const subUl = document.createElement('ul');
-        subUl.className = 'tree-sub hidden'; 
+        subUl.className = 'tree-sub hidden';
 
-        catToggle.addEventListener('click', () => {
-            subUl.classList.toggle('hidden');
-        });
+        catToggle.addEventListener('click', () => subUl.classList.toggle('hidden'));
 
-        Object.keys(database[cat]).forEach(sub => {
+        const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
+        subcategories.forEach(sub => {
+            if(!sub) return;
             const subLi = document.createElement('li');
             subLi.innerHTML = `<i class="fas fa-music"></i> ${sub}`;
             subLi.addEventListener('click', (e) => {
@@ -205,12 +209,7 @@ function renderSidebar() {
                 selectedSubcategory = sub;
                 currentView = 'tracks';
                 renderMosaic();
-                
-                if(window.innerWidth <= 768) {
-                    const sidebar = document.getElementById('sidebar');
-                    sidebar.classList.remove('open');
-                    sidebar.classList.add('collapsed');
-                }
+                if(window.innerWidth <= 768) handleToggleSidebar();
             });
             subUl.appendChild(subLi);
         });
@@ -222,16 +221,13 @@ function renderSidebar() {
 }
 
 // ==========================================
-// 4. PESQUISA GLOBAL YOUTUBE (V3)
+// 4. INTEGRAÇÃO E BUSCA YOUTUBE
 // ==========================================
 async function searchYouTubeGlobal(query) {
     if(!query.trim()) return;
-    
     if(query.includes('list=')) {
         const urlParams = new URLSearchParams(new URL(query).search);
-        const playlistId = urlParams.get('list');
-        fetchPlaylistItems(playlistId);
-        return;
+        return fetchPlaylistItems(urlParams.get('list'));
     }
 
     currentView = 'search_results';
@@ -239,17 +235,9 @@ async function searchYouTubeGlobal(query) {
     document.getElementById('mosaic-grid').innerHTML = '<h3>Buscando no YouTube...</h3>';
 
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=${encodeURIComponent(query)}&type=video,playlist&key=${CONFIG.YT_API_KEY}`;
-    
     try {
         const response = await fetch(url);
         const data = await response.json();
-        
-        if (data.error) {
-            console.error("Erro reportado pela API do YT: ", data.error);
-            document.getElementById('mosaic-grid').innerHTML = `<h3>Erro na API: ${data.error.message}</h3>`;
-            return;
-        }
-
         lastYtSearchResults = [];
         if(data.items) {
             data.items.forEach(item => {
@@ -265,15 +253,14 @@ async function searchYouTubeGlobal(query) {
         }
         renderMosaic();
     } catch (e) {
-        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro na busca global da API do YouTube.</h3>';
+        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro na busca global do YouTube.</h3>';
     }
 }
 
 async function fetchPlaylistItems(playlistId) {
     currentView = 'search_results';
     renderMosaic();
-    document.getElementById('mosaic-grid').innerHTML = '<h3>Importando Playlist do YouTube...</h3>';
-    
+    document.getElementById('mosaic-grid').innerHTML = '<h3>Importando Playlist...</h3>';
     const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=40&playlistId=${playlistId}&key=${CONFIG.YT_API_KEY}`;
     try {
         const response = await fetch(url);
@@ -292,309 +279,192 @@ async function fetchPlaylistItems(playlistId) {
         }
         renderMosaic();
     } catch(e) {
-        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro ao processar os dados da Playlist.</h3>';
+        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro ao carregar playlist.</h3>';
     }
 }
 
 async function fetchManualLinkData(e) {
-    if(e) { e.preventDefault(); e.stopPropagation(); } 
-    
+    if(e) { e.preventDefault(); e.stopPropagation(); }
     const url = document.getElementById('manual-media-url').value.trim();
-    if(!url) return alert("Cole uma URL válida do YouTube.");
+    if(!url) return alert("Cole uma URL válida.");
 
     document.getElementById('btn-fetch-manual').innerText = "Buscando...";
-
     let isPlaylist = url.includes('list=');
-    let targetId = "";
-
-    if(isPlaylist) {
-        const urlParams = new URLSearchParams(new URL(url).search);
-        targetId = urlParams.get('list');
-    } else {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-        const match = url.match(regExp);
-        targetId = (match && match[2].length == 11) ? match[2] : url;
-    }
+    let targetId = isPlaylist ? new URLSearchParams(new URL(url).search).get('list') : extractYoutubeId(url);
 
     if(!targetId) {
         document.getElementById('btn-fetch-manual').innerText = "Capturar Dados";
-        return alert("Não foi possível extrair o ID desta URL.");
+        return alert("Não extraiu o ID.");
     }
 
     const endpoint = isPlaylist ? 'playlists' : 'videos';
     const apiUrl = `https://www.googleapis.com/youtube/v3/${endpoint}?part=snippet&id=${targetId}&key=${CONFIG.YT_API_KEY}`;
-
     try {
         const res = await fetch(apiUrl);
         const data = await res.json();
         if(data.items && data.items.length > 0) {
             const snippet = data.items[0].snippet;
-            const item = {
-                type: isPlaylist ? 'playlist' : 'video',
-                youtubeId: targetId,
-                title: snippet.title,
-                thumb: snippet.thumbnails.medium ? snippet.thumbnails.medium.url : 'https://placehold.co/120x90',
-                channel: snippet.channelTitle
-            };
-            
-            document.getElementById('prev-thumb').src = item.thumb;
-            document.getElementById('prev-title').value = item.title;
-            document.getElementById('prev-title').dataset.videoid = item.youtubeId;
-            document.getElementById('prev-title').dataset.channel = item.channel;
-            document.getElementById('prev-title').dataset.mediatype = item.type;
-        } else {
-            alert("Nenhuma mídia encontrada com esta URL.");
+            document.getElementById('prev-thumb').src = snippet.thumbnails.medium ? snippet.thumbnails.medium.url : 'https://placehold.co/120x90';
+            document.getElementById('prev-title').value = snippet.title;
+            document.getElementById('prev-title').dataset.videoid = targetId;
+            document.getElementById('prev-title').dataset.mediatype = isPlaylist ? 'playlist' : 'video';
         }
-    } catch(e) {
-        console.error(e);
-        alert("Erro de comunicação com a API do YouTube.");
-    } finally {
-        document.getElementById('btn-fetch-manual').innerText = "Capturar Dados";
-    }
+    } catch(e) { alert("Erro de API."); }
+    finally { document.getElementById('btn-fetch-manual').innerText = "Capturar Dados"; }
 }
 
 function openAdminWithTrack(item) {
     document.getElementById('admin-modal').classList.remove('hidden');
     switchTabs('add-tab', 'tab-trigger-add');
-
     document.getElementById('manual-media-url').value = ""; 
     document.getElementById('prev-thumb').src = item.thumb;
     document.getElementById('prev-title').value = item.title;
     document.getElementById('prev-title').dataset.videoid = item.youtubeId;
-    document.getElementById('prev-title').dataset.channel = item.channel;
     document.getElementById('prev-title').dataset.mediatype = item.type; 
-    document.getElementById('media-category').focus();
 }
 
 function filterInternalDatabase(query) {
     const lowerQuery = query.toLowerCase();
-    const treeItems = document.querySelectorAll('#sidebar-tree > li');
-    treeItems.forEach(catLi => {
-        const catName = catLi.querySelector('.category-toggle').innerText.toLowerCase();
-        let hasMatch = false;
-        const subLis = catLi.querySelectorAll('.tree-sub li');
-        subLis.forEach(subLi => {
+    document.querySelectorAll('#sidebar-tree > li').forEach(catLi => {
+        const name = catLi.querySelector('.category-toggle').innerText.toLowerCase();
+        let match = name.includes(lowerQuery);
+        catLi.querySelectorAll('.tree-sub li').forEach(subLi => {
             if(subLi.innerText.toLowerCase().includes(lowerQuery)) {
-                subLi.classList.remove('hidden');
-                hasMatch = true;
-            } else {
-                subLi.classList.add('hidden');
-            }
+                subLi.classList.remove('hidden'); match = true;
+            } else { subLi.classList.add('hidden'); }
         });
-        if(catName.includes(lowerQuery) || hasMatch) catLi.classList.remove('hidden');
-        else catLi.classList.add('hidden');
+        if(match) catLi.classList.remove('hidden'); else catLi.classList.add('hidden');
     });
 }
 
 // ==========================================
-// 5. PLAYER DE VÍDEO & CONTROLE DE FILA
+// 5. CONTROLE DO PLAYER INTEGRADO
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return;
     currentTrackIndex = index;
     const track = currentPlaylist[index];
+    const vId = extractYoutubeId(track.link);
 
     document.getElementById('player-container').classList.remove('hidden');
-    document.getElementById('current-track-title').innerText = track.title;
+    document.getElementById('current-track-title').innerText = track.título;
 
     if (!ytPlayer) {
         ytPlayer = new YT.Player('yt-player', {
-            videoId: track.youtubeId,
+            videoId: vId,
             playerVars: { 'autoplay': 1, 'playsinline': 1 },
-            events: { 'onStateChange': onPlayerStateChange }
+            events: { 'onStateChange': (e) => { if(e.data === 0 && currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); } }
         });
     } else {
-        ytPlayer.loadVideoById(track.youtubeId);
-    }
-}
-
-function onPlayerStateChange(event) {
-    if (event.data === 0) { 
-        if (currentTrackIndex + 1 < currentPlaylist.length) {
-            playTrack(currentTrackIndex + 1);
-        } else {
-            alert("Fim da playlist!");
-        }
+        ytPlayer.loadVideoById(vId);
     }
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD
+// 6. COMPONENTE CRUD GERAL (ARRAY LINEAR)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
     listContainer.innerHTML = '';
 
-    if (!database || Object.keys(database).length === 0) {
-        listContainer.innerHTML = '<p style="color: #666; padding: 1rem;">Seu banco de dados está vazio.</p>';
+    if (database.length === 0) {
+        listContainer.innerHTML = '<p style="color: #666; padding: 1rem;">Banco vazio.</p>';
         return;
     }
 
-    Object.keys(database).forEach(cat => {
-        listContainer.appendChild(createCrudRow(cat, 'category', () => {
-            let novo = prompt("Novo nome da Categoria:", cat);
-            if(novo && novo.trim() !== "" && novo !== cat) { 
-                database[novo.trim()] = database[cat]; 
-                delete database[cat]; 
-                saveState(); 
-            }
-        }, () => {
-            if(confirm(`Excluir categoria "${cat}" e tudo o que há dentro dela?`)) { 
-                delete database[cat]; 
-                saveState(); 
-            }
-        }, () => downloadJSON(database[cat], cat)));
-
-        if (database[cat]) {
-            Object.keys(database[cat]).forEach(sub => {
-                listContainer.appendChild(createCrudRow(sub, 'subcategory', () => {
-                    let novo = prompt("Novo nome da Subcategoria:", sub);
-                    if(novo && novo.trim() !== "" && novo !== sub) { 
-                        database[cat][novo.trim()] = database[cat][sub]; 
-                        delete database[cat][sub]; 
-                        saveState(); 
-                    }
-                }, () => {
-                    if(confirm(`Excluir subcategoria "${sub}" inteira?`)) { 
-                        delete database[cat][sub]; 
-                        saveState(); 
-                    }
-                }, () => downloadJSON(database[cat][sub], sub)));
-
-                if (database[cat][sub] && Array.isArray(database[cat][sub])) {
-                    database[cat][sub].forEach((track, idx) => {
-                        listContainer.appendChild(createCrudRow(track.title, 'track', () => {
-                            let novo = prompt("Novo título da Música:", track.title);
-                            if(novo && novo.trim() !== "") { 
-                                database[cat][sub][idx].title = novo.trim(); 
-                                saveState(); 
-                            }
-                        }, () => {
-                            if(confirm(`Excluir música "${track.title}"?`)) { 
-                                database[cat][sub].splice(idx, 1); 
-                                saveState(); 
-                            }
-                        }, () => downloadJSON(track, track.title)));
-                    });
-                }
-            });
-        }
+    database.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'crud-item';
+        row.innerHTML = `<span><strong>[${item.categoria} > ${item.subcategoria}]</strong> ${item.título}</span>
+            <div class="crud-actions">
+                <button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>
+                <button class="crud-btn btn-del"><i class="fas fa-trash"></i></button>
+            </div>`;
+            
+        row.querySelector('.btn-edit').onclick = (e) => {
+            e.preventDefault();
+            let novo = prompt("Novo título:", item.título);
+            if(novo && novo.trim() !== "") { database[idx].título = novo.trim(); saveState(); }
+        };
+        row.querySelector('.btn-del').onclick = (e) => {
+            e.preventDefault();
+            if(confirm(`Excluir "${item.título}"?`)) { database.splice(idx, 1); saveState(); }
+        };
+        listContainer.appendChild(row);
     });
-}
-
-function createCrudRow(title, type, onEdit, onDel, onExp) {
-    const row = document.createElement('div');
-    row.className = `crud-item ${type === 'subcategory' ? 'sub-level' : type === 'track' ? 'track-level' : ''}`;
-    row.innerHTML = `<span><strong>[${type.toUpperCase()}]</strong> ${title}</span>
-        <div class="crud-actions">
-            <button class="crud-btn btn-edit" title="Editar"><i class="fas fa-edit"></i></button>
-            <button class="crud-btn btn-del" title="Excluir"><i class="fas fa-trash"></i></button>
-            <button class="crud-btn btn-exp" title="Exportar Bloco"><i class="fas fa-download"></i></button>
-        </div>`;
-        
-    row.querySelector('.btn-edit').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onEdit(); };
-    row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onDel(); };
-    row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onExp(); };
-    return row;
 }
 
 function handleJSONImport(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const importedData = JSON.parse(e.target.result);
-            if (typeof importedData === 'object' && importedData !== null && !Array.isArray(importedData)) {
-                if (confirm("Deseja mesclar este JSON com suas mídias atuais?")) {
-                    database = Object.assign({}, database, importedData);
+            const imported = JSON.parse(e.target.result);
+            const list = Array.isArray(imported) ? imported : Object.values(imported);
+            if (list.length > 0 && list[0].link) {
+                if (confirm("Mesclar dados importados?")) {
+                    database = database.concat(list);
                     saveState();
-                    alert("Backup em lote importado e gravado com sucesso no Firebase!");
+                    alert("Dados importados com sucesso!");
                 }
-            } else {
-                alert("Estrutura de arquivo JSON inválida.");
-            }
-        } catch (err) {
-            alert("Erro ao ler o arquivo JSON.");
-        }
+            } else { alert("Formato inválido."); }
+        } catch (err) { alert("Erro de leitura."); }
     };
     reader.readAsText(file);
 }
 
 function saveState() {
-    fetch(CONFIG.FIREBASE_URL, { 
-        method: 'PUT', 
-        body: JSON.stringify(database) 
-    })
-    .then(() => {
-        renderSidebar(); 
-        renderMosaic(); 
-        renderCrudManager();
-    })
-    .catch(err => {
-        console.error("Erro na sincronização Firebase, atualizando local: ", err);
-        renderSidebar(); 
-        renderMosaic(); 
-        renderCrudManager();
-    });
+    fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(database) })
+        .then(() => { renderSidebar(); renderMosaic(); renderCrudManager(); });
 }
 
 function downloadJSON(obj, filename) {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
     const a = document.createElement('a');
     a.setAttribute("href", dataStr);
-    a.setAttribute("download", `${filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_backup.json`);
+    a.setAttribute("download", `${filename}_backup.json`);
     document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.click(); a.remove();
 }
 
 async function saveMediaToDatabase(e) {
-    if(e) { e.preventDefault(); e.stopPropagation(); } 
-
+    if(e) { e.preventDefault(); e.stopPropagation(); }
     const cat = document.getElementById('media-category').value.trim();
     const sub = document.getElementById('media-subcategory').value.trim();
     const title = document.getElementById('prev-title').value;
     const idOrList = document.getElementById('prev-title').dataset.videoid;
     const thumb = document.getElementById('prev-thumb').src;
-    const channel = document.getElementById('prev-title').dataset.channel;
     const mediaType = document.getElementById('prev-title').dataset.mediatype;
 
-    if(!cat || !sub || !title || !idOrList) {
-        return alert("Preencha a categoria e subcategoria manualmente antes de salvar.");
-    }
-
-    if(!database[cat]) database[cat] = {};
-    if(!database[cat][sub]) database[cat][sub] = [];
+    if(!cat || !sub || !title || !idOrList) return alert("Preencha categoria e subcategoria.");
 
     if (mediaType === 'playlist') {
         const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${idOrList}&key=${CONFIG.YT_API_KEY}`;
         try {
             const res = await fetch(url);
             const data = await res.json();
-            if(data.items && data.items.length > 0) {
+            if(data.items) {
                 data.items.forEach(item => {
-                    database[cat][sub].push({
-                        id: "v_" + Date.now() + Math.random().toString(36).substr(2, 5),
-                        title: item.snippet.title,
-                        youtubeId: item.snippet.resourceId.videoId,
-                        thumb: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : thumb,
-                        channel: item.snippet.channelTitle
+                    database.push({
+                        capa: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : thumb,
+                        categoria: cat,
+                        subcategoria: sub,
+                        título: item.snippet.title,
+                        link: `https://www.youtube.com/embed/${item.snippet.resourceId.videoId}`
                     });
                 });
-                alert(`${data.items.length} músicas da playlist foram importadas com sucesso!`);
-            } else {
-                alert("Esta playlist não possui vídeos públicos acessíveis.");
-                return;
             }
-        } catch(e) {
-            console.error("Erro ao importar playlist", e);
-            alert("Erro de comunicação com o YouTube.");
-            return;
-        }
+        } catch(err) { console.error(err); }
     } else {
-        database[cat][sub].push({ id: "v_" + Date.now(), title, youtubeId: idOrList, thumb, channel });
+        // COMPATIBILIDADE VISADA: Salva exatamente obedecendo o seu novo padrão
+        database.push({
+            capa: thumb,
+            categoria: cat,
+            subcategoria: sub,
+            título: title,
+            link: `https://www.youtube.com/embed/${idOrList}`
+        });
     }
 
     saveState();
@@ -609,88 +479,50 @@ async function saveMediaToDatabase(e) {
 function switchTabs(targetTabId, activeTriggerBtnId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-    
     document.getElementById(activeTriggerBtnId).classList.add('active');
     document.getElementById(targetTabId).classList.remove('hidden');
 }
 
-// CORREÇÃO VISADA: Evento unificado para impedir cliques fantasmas em dispositivos móveis
 function handleToggleSidebar(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
     const sidebar = document.getElementById('sidebar');
-    
     if (sidebar.classList.contains('open')) {
-        sidebar.classList.remove('open');
-        sidebar.classList.add('collapsed');
+        sidebar.classList.remove('open'); sidebar.classList.add('collapsed');
     } else {
-        sidebar.classList.remove('collapsed');
-        sidebar.classList.add('open');
+        sidebar.classList.remove('collapsed'); sidebar.classList.add('open');
     }
 }
 
 function closeAllModals() { document.getElementById('admin-modal').classList.add('hidden'); }
 
 // ==========================================
-// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS)
+// CONFIGURAÇÃO DOS GATILHOS (BLINDADOS POINTERDOWN)
 // ==========================================
 function setupEventListeners() {
     document.getElementById('search-yt-input').addEventListener('keypress', (e) => {
         if(e.key === 'Enter') searchYouTubeGlobal(e.target.value);
     });
+    document.getElementById('search-internal-input').addEventListener('input', (e) => filterInternalDatabase(e.target.value));
 
-    document.getElementById('search-internal-input').addEventListener('input', (e) => {
-        filterInternalDatabase(e.target.value);
-    });
-
-    // BLINDAGEM DO PAINEL DE CONTROLE: Unificação por pointerdown para evitar loops assíncronos no Firebase
     document.getElementById('btn-fetch-manual').onpointerdown = (e) => fetchManualLinkData(e);
     document.getElementById('btn-save-media').onpointerdown = (e) => saveMediaToDatabase(e);
-
-    // BLINDAGEM DO HAMBÚRGUER: Evento Pointer único intercepta toque e clique sem duplicidade
     document.getElementById('toggle-sidebar').onpointerdown = (e) => handleToggleSidebar(e);
-    
     document.getElementById('bc-root').addEventListener('click', () => { currentView = 'categories'; renderMosaic(); });
     
     document.getElementById('btn-open-admin').onpointerdown = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        document.getElementById('admin-modal').classList.remove('hidden');
-        switchTabs('add-tab', 'tab-trigger-add');
-        renderCrudManager(); 
+        e.preventDefault(); document.getElementById('admin-modal').classList.remove('hidden');
+        switchTabs('add-tab', 'tab-trigger-add'); renderCrudManager(); 
     };
-    
-    document.getElementById('btn-close-admin').onpointerdown = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        closeAllModals();
-    };
-    
-    document.getElementById('btn-export-json').onpointerdown = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        downloadJSON(database, 'banco_completo');
-    };
-    
-    document.getElementById('btn-trigger-import').onpointerdown = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        document.getElementById('import-json-file').click();
-    };
-    
+    document.getElementById('btn-close-admin').onpointerdown = (e) => { e.preventDefault(); closeAllModals(); };
+    document.getElementById('btn-export-json').onpointerdown = (e) => { e.preventDefault(); downloadJSON(database, 'banco_completo'); };
+    document.getElementById('btn-trigger-import').onpointerdown = (e) => { e.preventDefault(); document.getElementById('import-json-file').click(); };
     document.getElementById('import-json-file').addEventListener('change', handleJSONImport);
 
     document.getElementById('tab-trigger-manage').onpointerdown = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        switchTabs('manage-tab', 'tab-trigger-manage');
-        renderCrudManager();
+        e.preventDefault(); switchTabs('manage-tab', 'tab-trigger-manage'); renderCrudManager();
     };
-
-    document.getElementById('tab-trigger-add').onpointerdown = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        switchTabs('add-tab', 'tab-trigger-add');
-    };
-    
-    document.getElementById('btn-close-player').onpointerdown = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        if(ytPlayer) ytPlayer.stopVideo();
-        document.getElementById('player-container').classList.add('hidden');
-    };
+    document.getElementById('tab-trigger-add').onpointerdown = (e) => { e.preventDefault(); switchTabs('add-tab', 'tab-trigger-add'); };
+    document.getElementById('btn-close-player').onpointerdown = (e) => { e.preventDefault(); if(ytPlayer) ytPlayer.stopVideo(); document.getElementById('player-container').classList.add('hidden'); };
 }
 
 window.onload = checkSession;
