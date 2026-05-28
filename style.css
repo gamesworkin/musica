@@ -71,7 +71,7 @@ body {
 /* Mosaicos */
 .main-content { flex: 1; padding: 2rem; overflow-y: auto; }
 .mosaic-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;
 }
 
 .card {
@@ -107,7 +107,7 @@ body {
 .btn-secondary { background: #282828; color: #fff; border: 1px solid var(--border); }
 .btn-secondary:hover { background: #383838; border-color: var(--accent); }
 
-/* RETORNO DO LAYOUT DA ÁRVORE CRUD GERENCIAL */
+/* ÁRVORE CRUD GERENCIAL */
 .crud-list { text-align: left; margin-top: 1.5rem; background: #111; padding: 1rem; border-radius: 6px; }
 .crud-item { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.5rem; border-bottom: 1px solid #222; gap: 1rem; }
 .crud-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
