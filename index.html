@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StreamHub - Reprodutor de Música Pessoal</title>
+    <title>StreamHub - Reprodutor de Mídia Pessoal</title>
     
     <link rel="icon" type="image/x-icon" href="fav.ico">
     
@@ -30,7 +30,7 @@
             
             <div class="search-container">
                 <i class="fab fa-youtube search-icon text-red"></i>
-                <input type="text" id="search-yt-input" placeholder="Pesquisar músicas ou playlists direto no YouTube...">
+                <input type="text" id="search-yt-input" placeholder="Pesquisar mídias ou playlists direto no YouTube...">
             </div>
 
             <div class="header-actions">
@@ -43,7 +43,7 @@
             <nav id="sidebar" class="sidebar">
                 <div class="internal-search">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="search-internal-input" placeholder="Filtrar minhas categorias...">
+                    <input type="text" id="search-internal-input" placeholder="Filtrar categorias ou mídias...">
                 </div>
                 <h3>Categorias</h3>
                 <ul id="sidebar-tree" class="tree-menu">
@@ -67,7 +67,7 @@
                         <video id="raw-player" class="hidden" controls autoplay style="width:100%; height:100%; background:#000;"></video>
                     </div>
                     <div class="player-info">
-                        <h4 id="current-track-title">Nenhuma música reproduzindo</h4>
+                        <h4 id="current-track-title">Nenhuma mídia reproduzindo</h4>
                         <button id="btn-close-player" class="icon-btn"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
@@ -128,7 +128,7 @@
 
     <div id="edit-media-modal" class="modal-overlay hidden" style="z-index: 100000;">
         <div class="modal-content" style="max-width: 500px; text-align: left;">
-            <h3 style="margin-bottom: 1rem;"><i class="fas fa-edit text-red"></i> Editar Dados do Vídeo</h3>
+            <h3 style="margin-bottom: 1rem;"><i class="fas fa-edit text-red"></i> Editar Dados da Mídia</h3>
             <div class="form-group" style="margin-bottom: 0.5rem;">
                 <label style="font-size: 0.85rem; color: var(--text-muted);">Título da Mídia:</label>
                 <input type="text" id="edit-field-title">
