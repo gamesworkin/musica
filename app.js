@@ -285,10 +285,10 @@ async function fetchManualLinkData(e) {
     const url = document.getElementById('manual-media-url').value.trim();
     if(!url) return alert("Cole uma URL válida.");
 
-    // Se nao for link do Youtube, pula a busca na API do Youtube e permite criar dados padrao direto
+    // Se nao for link do Youtube, pula a busca na API do Youtube e aceita o link de qualquer outro servidor (Archive, GitHub, etc)
     if(!url.includes("youtube.com") && !url.includes("youtu.be")) {
         document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Externo";
-        document.getElementById('prev-title').value = "Vídeo de Site Externo";
+        document.getElementById('prev-title').value = "Vídeo Externo / Arquivo Direto";
         document.getElementById('prev-title').dataset.videoid = url;
         document.getElementById('prev-title').dataset.mediatype = 'externo';
         return;
@@ -344,7 +344,7 @@ function filterInternalDatabase(query) {
 }
 
 // ==========================================
-// 5. CHAVEAMENTO AUTOMÁTICO DE REPRODUTORES (YOUTUBE VS UNIVERSAL)
+// 5. CHAVEAMENTO DINÂMICO TRIPLO AUTOMÁTICO (YOUTUBE VS UNIVERSAL VS ARQUIVOS BRUTOS)
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return;
@@ -356,14 +356,20 @@ function playTrack(index) {
 
     const ytPlayerEl = document.getElementById('yt-player');
     const univPlayerEl = document.getElementById('universal-player');
+    const rawPlayerEl = document.getElementById('raw-player');
 
-    // Verifica se o link pertence ao ecossistema do YouTube
-    if(track.link.includes('youtube.com') || track.link.includes('youtu.be')) {
-        // Ativa modo YouTube e esconde o universal
-        univPlayerEl.classList.add('hidden');
-        univPlayerEl.src = ""; // Reseta player universal
+    // Desliga e limpa preventivamente as streams anteriores para evitar sobreposições de áudio
+    univPlayerEl.src = "";
+    rawPlayerEl.src = "";
+    univPlayerEl.classList.add('hidden');
+    rawPlayerEl.classList.add('hidden');
+    ytPlayerEl.classList.add('hidden');
+
+    const linkLower = track.link.toLowerCase();
+
+    // REPRODUTOR 1: Ecossistema Oficial do YouTube
+    if(linkLower.includes('youtube.com') || linkLower.includes('youtu.be')) {
         ytPlayerEl.classList.remove('hidden');
-
         const vId = extractYoutubeId(track.link);
         if (!ytPlayer) {
             ytPlayer = new YT.Player('yt-player', {
@@ -374,14 +380,27 @@ function playTrack(index) {
         } else {
             ytPlayer.loadVideoById(vId);
         }
-    } else {
-        // LINK DE OUTRO SITE: Pausa o YouTube se ele existir e ativa o Player Universal
-        if(ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
-            try { ytPlayer.pauseVideo(); } catch(err){}
-        }
-        ytPlayerEl.classList.add('hidden');
+    } 
+    // REPRODUTOR 3: Arquivos de Mídia Brutos (Extensões de Áudio/Vídeo ou links puros do GitHub / Arquivos Diretos)
+    else if(linkLower.endsWith('.mp4') || linkLower.endsWith('.mkv') || linkLower.endsWith('.avi') || 
+            linkLower.endsWith('.mpg') || linkLower.endsWith('.mpeg') || linkLower.endsWith('.mp3') || 
+            linkLower.includes('raw.githubusercontent') || linkLower.includes('/raw/')) {
         
-        // Alimenta e exibe o reprodutor universal
+        if(ytPlayer && typeof ytPlayer.pauseVideo === 'function') { try { ytPlayer.pauseVideo(); } catch(err){} }
+        
+        rawPlayerEl.classList.remove('hidden');
+        rawPlayerEl.src = track.link;
+        rawPlayerEl.play();
+
+        // Passagem automática de faixa para arquivos de reprodução direta
+        rawPlayerEl.onended = () => {
+            if(currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1);
+        };
+    } 
+    // REPRODUTOR 2: Reprodutor Universal Incorporado (Páginas Web / Archive.org Embeds)
+    else {
+        if(ytPlayer && typeof ytPlayer.pauseVideo === 'function') { try { ytPlayer.pauseVideo(); } catch(err){} }
+        
         univPlayerEl.classList.remove('hidden');
         univPlayerEl.src = track.link;
     }
@@ -589,7 +608,6 @@ async function saveMediaToDatabase(e) {
             }
         } catch(err) { console.error(err); }
     } else if (mediaType === 'externo') {
-        // Adiciona midias externas diretamente usando a URL crua
         database.push({ capa: thumb, categoria: cat, subcategoria: sub, título: title, link: idOrList });
     } else {
         database.push({ capa: thumb, categoria: cat, subcategoria: sub, título: title, link: `https://www.youtube.com/embed/${idOrList}` });
@@ -660,7 +678,13 @@ function setupEventListeners() {
     document.getElementById('btn-close-player').onpointerdown = (e) => {
         e.preventDefault();
         if(ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(err){} }
-        document.getElementById('universal-player').src = ""; // Corta o audio/video externo imediatamente
+        
+        // Limpa e silencia os reprodutores locais imediatamente ao fechar a janela
+        document.getElementById('universal-player').src = ""; 
+        const rawPlayer = document.getElementById('raw-player');
+        rawPlayer.pause();
+        rawPlayer.src = "";
+
         document.getElementById('player-container').classList.add('hidden');
     };
 }
