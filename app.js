@@ -25,6 +25,10 @@ let ytPlayer = null;
 let lastYtSearchResults = []; 
 let activeEditingIndex = null;
 
+// Controladores para salvar quais blocos da arvore gerencial estao expandidos
+let expandedCrudCats = {};
+let expandedCrudSubs = {};
+
 // ==========================================
 // 1. AUTENTICAÇÃO COM SESSÃO DE 2 HORAS
 // ==========================================
@@ -117,7 +121,7 @@ function renderMosaic() {
                 selectedCategory = cat;
                 currentView = 'subcategories';
                 renderMosaic();
-            }));
+            }, -1));
         });
     } 
     else if (currentView === 'subcategories') {
@@ -131,7 +135,7 @@ function renderMosaic() {
                 selectedSubcategory = sub;
                 currentView = 'tracks';
                 renderMosaic();
-            }));
+            }, -1));
         });
     } 
     else if (currentView === 'tracks') {
@@ -142,37 +146,101 @@ function renderMosaic() {
 
         currentPlaylist = database.filter(item => item.categoria === selectedCategory && item.subcategoria === selectedSubcategory);
         currentPlaylist.forEach((track, index) => {
+            // Procura o index real no banco completo para repassar ao botao de edicao direta
+            const realIndex = database.findIndex(dbItem => dbItem.link === track.link && dbItem.título === track.título);
             grid.appendChild(createCard(track.título, track.capa, false, false, () => {
                 playTrack(index);
-            }));
+            }, realIndex));
         });
     }
     else if (currentView === 'search_results') {
         document.getElementById('bc-search').classList.remove('hidden');
         lastYtSearchResults.forEach(item => {
             const isPlaylist = item.type === 'playlist';
-            const card = createCard(item.title, item.thumb, true, isPlaylist, null);
+            const card = createCard(item.title, item.thumb, true, isPlaylist, null, -1);
+            
             card.querySelector('.add-music-badge').onclick = (e) => {
                 e.preventDefault(); e.stopPropagation();
                 openAdminWithTrack(item);
             };
+
+            // INCLUSÃO DE RECURSOS EXTRAS: Assistir previa e listar mídias da playlist
+            const btnGroup = document.createElement('div');
+            btnGroup.className = 'search-btn-group';
+            
+            const btnPlay = document.createElement('button');
+            btnPlay.style.background = '#2980b9';
+            btnPlay.innerHTML = `<i class="fas fa-play"></i> Assistir`;
+            btnPlay.onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                let fakeTrack = { título: item.title, link: isPlaylist ? `https://www.youtube.com/playlist?list=${item.youtubeId}` : `https://www.youtube.com/embed/${item.youtubeId}` };
+                currentPlaylist = [fakeTrack];
+                playTrack(0);
+            };
+            btnGroup.appendChild(btnPlay);
+
+            if(isPlaylist) {
+                const btnList = document.createElement('button');
+                btnList.style.background = '#8e44ad';
+                btnList.innerHTML = `<i class="fas fa-list"></i> Ver Mídias`;
+                btnList.onclick = (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    peekPlaylistContents(item.youtubeId);
+                };
+                btnGroup.appendChild(btnList);
+            }
+
+            card.appendChild(btnGroup);
             grid.appendChild(card);
         });
     }
 }
 
-function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback) {
+// MODIFICADO: Agora inclui parametro realIndex para acionar o botão de edição flutuante no mosaico
+function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback, realIndex = -1) {
     const card = document.createElement('div');
     card.className = 'card';
     let htmlContent = `<img src="${imgSrc}"><h4>${title}</h4>`;
-    if(isPlaylist) htmlContent += `<span class="media-type-badge"><i class="fas fa-list"></i> Playlist</span>`;
+    if(isPlaylist) htmlContent += `<span class="media-type-badge"><i class="fas fa-photo-film"></i> Playlist</span>`;
     if(showAddButton) {
-        const btnText = isPlaylist ? "Adicionar Playlist" : "Adicionar";
+        const btnText = isPlaylist ? "Add Playlist" : "Adicionar";
         htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> ${btnText}</button>`;
     }
+    
+    // REQUISITO: Ícone de edição rápida no canto inferior direito para mídias válidas exibidas
+    if(realIndex >= 0) {
+        htmlContent += `<div class="quick-edit-badge" title="Editar esta mídia na hora"><i class="fas fa-cog"></i></div>`;
+    }
+
     card.innerHTML = htmlContent;
     if(clickCallback) card.addEventListener('click', clickCallback);
+
+    if(realIndex >= 0) {
+        card.querySelector('.quick-edit-badge').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            openAdvancedEditModal(realIndex);
+        });
+    }
+
     return card;
+}
+
+// REQUISITO: Mostrar os títulos de cada vídeo contido em uma playlist direto na busca
+async function peekPlaylistContents(playlistId) {
+    alert("Buscando títulos da playlist... Aguarde.");
+    const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${CONFIG.YT_API_KEY}`;
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if(data.items && data.items.length > 0) {
+            let titles = data.items.map((item, idx) => `${idx + 1}. ${item.snippet.title}`).join('\n');
+            alert(`Mídias nesta Playlist:\n\n${titles.substring(0, 1500)}${titles.length > 1500 ? '\n...e mais mídias.' : ''}`);
+        } else {
+            alert("Esta playlist não retornou mídias públicas.");
+        }
+    } catch(e) {
+        alert("Erro ao ler dados da playlist.");
+    }
 }
 
 // ==========================================
@@ -199,7 +267,7 @@ function renderSidebar() {
         subcategories.forEach(sub => {
             if(!sub) return;
             const subLi = document.createElement('li');
-            subLi.innerHTML = `<i class="fas fa-music"></i> ${sub}`;
+            subLi.innerHTML = `<i class="fas fa-photo-film"></i> ${sub}`;
             subLi.addEventListener('click', (e) => {
                 e.stopPropagation();
                 selectedCategory = cat;
@@ -218,7 +286,7 @@ function renderSidebar() {
 }
 
 // ==========================================
-// 4. INTEGRAÇÃO E BUSCA YOUTUBE
+// 4. PESQUISA GLOBAL YOUTUBE (V3)
 // ==========================================
 async function searchYouTubeGlobal(query) {
     if(!query.trim()) return;
@@ -285,10 +353,9 @@ async function fetchManualLinkData(e) {
     const url = document.getElementById('manual-media-url').value.trim();
     if(!url) return alert("Cole uma URL válida.");
 
-    // Se nao for link do Youtube, pula a busca na API do Youtube e aceita o link de qualquer outro servidor (Archive, GitHub, etc)
     if(!url.includes("youtube.com") && !url.includes("youtu.be")) {
         document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Externo";
-        document.getElementById('prev-title').value = "Vídeo Externo / Arquivo Direto";
+        document.getElementById('prev-title').value = "Mídia Externa / Arquivo Direto";
         document.getElementById('prev-title').dataset.videoid = url;
         document.getElementById('prev-title').dataset.mediatype = 'externo';
         return;
@@ -329,22 +396,52 @@ function openAdminWithTrack(item) {
     document.getElementById('prev-title').dataset.mediatype = item.type; 
 }
 
+// REQUISITO: Indexar mídias individuais além de categorias/subcategorias na pesquisa lateral interna
 function filterInternalDatabase(query) {
-    const lowerQuery = query.toLowerCase();
-    document.querySelectorAll('#sidebar-tree > li').forEach(catLi => {
-        const name = catLi.querySelector('.category-toggle').innerText.toLowerCase();
-        let match = name.includes(lowerQuery);
-        catLi.querySelectorAll('.tree-sub li').forEach(subLi => {
-            if(subLi.innerText.toLowerCase().includes(lowerQuery)) {
-                subLi.classList.remove('hidden'); match = true;
-            } else { subLi.classList.add('hidden'); }
+    const lowerQuery = query.toLowerCase().trim();
+    const treeItems = document.querySelectorAll('#sidebar-tree > li');
+    
+    treeItems.forEach(catLi => {
+        const catName = catLi.querySelector('.category-toggle').innerText.toLowerCase();
+        let catMatches = catName.includes(lowerQuery);
+        let subMatchesAny = false;
+
+        const subLis = catLi.querySelectorAll('.tree-sub li');
+        subLis.forEach(subLi => {
+            const subName = subLi.innerText.toLowerCase();
+            let subMatches = subName.includes(lowerQuery);
+
+            // Procura mídias associadas a essa categoria e subcategoria para complementar o indice
+            const realCat = catLi.querySelector('.category-toggle').innerText.trim();
+            const realSub = subLi.innerText.trim();
+            const mediaMatches = database.some(item => 
+                item.categoria === realCat && 
+                item.subcategoria === realSub && 
+                item.título.toLowerCase().includes(lowerQuery)
+            );
+
+            if (subMatches || mediaMatches || catMatches) {
+                subLi.classList.remove('hidden');
+                subMatchesAny = true;
+            } else {
+                subLi.classList.add('hidden');
+            }
         });
-        if(match) catLi.classList.remove('hidden'); else catLi.classList.add('hidden');
+
+        if (catMatches || subMatchesAny) {
+            catLi.classList.remove('hidden');
+            // Abre automaticamente as pastas que possuem resultados correspondentes à pesquisa interna
+            if(lowerQuery !== "") {
+                catLi.querySelector('.tree-sub').classList.remove('hidden');
+            }
+        } else {
+            catLi.classList.add('hidden');
+        }
     });
 }
 
 // ==========================================
-// 5. CHAVEAMENTO DINÂMICO TRIPLO AUTOMÁTICO (YOUTUBE VS UNIVERSAL VS ARQUIVOS BRUTOS)
+// 5. CHAVEAMENTO DINÂMICO TRIPLO AUTOMÁTICO
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return;
@@ -358,7 +455,6 @@ function playTrack(index) {
     const univPlayerEl = document.getElementById('universal-player');
     const rawPlayerEl = document.getElementById('raw-player');
 
-    // Desliga e limpa preventivamente as streams anteriores para evitar sobreposições de áudio
     univPlayerEl.src = "";
     rawPlayerEl.src = "";
     univPlayerEl.classList.add('hidden');
@@ -367,7 +463,6 @@ function playTrack(index) {
 
     const linkLower = track.link.toLowerCase();
 
-    // REPRODUTOR 1: Ecossistema Oficial do YouTube
     if(linkLower.includes('youtube.com') || linkLower.includes('youtu.be')) {
         ytPlayerEl.classList.remove('hidden');
         const vId = extractYoutubeId(track.link);
@@ -381,7 +476,6 @@ function playTrack(index) {
             ytPlayer.loadVideoById(vId);
         }
     } 
-    // REPRODUTOR 3: Arquivos de Mídia Brutos (Extensões de Áudio/Vídeo ou links puros do GitHub / Arquivos Diretos)
     else if(linkLower.endsWith('.mp4') || linkLower.endsWith('.mkv') || linkLower.endsWith('.avi') || 
             linkLower.endsWith('.mpg') || linkLower.endsWith('.mpeg') || linkLower.endsWith('.mp3') || 
             linkLower.includes('raw.githubusercontent') || linkLower.includes('/raw/')) {
@@ -392,22 +486,19 @@ function playTrack(index) {
         rawPlayerEl.src = track.link;
         rawPlayerEl.play();
 
-        // Passagem automática de faixa para arquivos de reprodução direta
         rawPlayerEl.onended = () => {
             if(currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1);
         };
     } 
-    // REPRODUTOR 2: Reprodutor Universal Incorporado (Páginas Web / Archive.org Embeds)
     else {
         if(ytPlayer && typeof ytPlayer.pauseVideo === 'function') { try { ytPlayer.pauseVideo(); } catch(err){} }
-        
         univPlayerEl.classList.remove('hidden');
         univPlayerEl.src = track.link;
     }
 }
 
 // ==========================================
-// 6. COMPONENTE CRUD EM ÁRVORE HIERÁRQUICA
+// 6. NOVO LAYOUT GERENCIAL TOTALMENTE EM ÁRVORE SANFONA RETRÁTIL
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list');
@@ -423,7 +514,8 @@ function renderCrudManager() {
     categories.forEach(cat => {
         if(!cat) return;
         
-        listContainer.appendChild(createCrudRow(cat, 'categoria', () => {
+        // NÍVEL 1: Linha da Categoria
+        const catRow = createCrudRow(cat, 'categoria', () => {
             let novo = prompt("Novo nome para a Categoria:", cat);
             if(novo && novo.trim() !== "" && novo.trim() !== cat) {
                 database.forEach(item => { if(item.categoria === cat) item.categoria = novo.trim(); });
@@ -437,13 +529,27 @@ function renderCrudManager() {
         }, () => {
             const bloco = database.filter(item => item.categoria === cat);
             downloadJSON(bloco, `categoria_${cat}`);
-        }));
+        });
+
+        // Bloco contenedor de subcategorias (escondido por padrao)
+        const subBlockContainer = document.createElement('div');
+        subBlockContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
+
+        catRow.addEventListener('click', (e) => {
+            // Evita disparar expansao ao clicar nos botoes de acao da direita
+            if(e.target.closest('.crud-actions')) return; 
+            expandedCrudCats[cat] = !expandedCrudCats[cat];
+            subBlockContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
+        });
+
+        listContainer.appendChild(catRow);
 
         const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
         subcategories.forEach(sub => {
             if(!sub) return;
 
-            listContainer.appendChild(createCrudRow(sub, 'subcategoria', () => {
+            // NÍVEL 2: Linha da Subcategoria
+            const subRow = createCrudRow(sub, 'subcategoria', () => {
                 let novo = prompt(`Novo nome para a Subcategoria [${cat} > ${sub}]:`, sub);
                 if(novo && novo.trim() !== "" && novo.trim() !== sub) {
                     database.forEach(item => { if(item.categoria === cat && item.subcategoria === sub) item.subcategoria = novo.trim(); });
@@ -457,36 +563,60 @@ function renderCrudManager() {
             }, () => {
                 const bloco = database.filter(item => item.categoria === cat && item.subcategoria === sub);
                 downloadJSON(bloco, `sub_cat_${sub}`);
-            }));
+            });
 
+            // Bloco contenedor das midias (escondido por padrao)
+            const mediaBlockContainer = document.createElement('div');
+            mediaBlockContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
+
+            subRow.addEventListener('click', (e) => {
+                if(e.target.closest('.crud-actions')) return;
+                expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub];
+                mediaBlockContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
+            });
+
+            subBlockContainer.appendChild(subRow);
+
+            // NÍVEL 3: Varre e renderiza as Mídias individuais
             database.forEach((item, idx) => {
                 if(item.categoria === cat && item.subcategoria === sub) {
-                    listContainer.appendChild(createCrudRow(item.título, 'musica', () => {
+                    const mediaRow = createCrudRow(item.título, 'mídia', () => {
                         openAdvancedEditModal(idx);
                     }, () => {
-                        if(confirm(`Excluir o vídeo "${item.título}"?`)) { database.splice(idx, 1); saveState(); }
+                        if(confirm(`Excluir a mídia "${item.título}"?`)) { database.splice(idx, 1); saveState(); }
                     }, () => {
-                        downloadJSON(item, `video_${item.título}`);
-                    }));
+                        downloadJSON(item, `midia_${item.título}`);
+                    });
+                    mediaBlockContainer.appendChild(mediaRow);
                 }
             });
+
+            subBlockContainer.appendChild(mediaBlockContainer);
         });
+
+        listContainer.appendChild(subBlockContainer);
     });
 }
 
 function createCrudRow(title, type, onEdit, onDel, onExp) {
     const row = document.createElement('div');
-    row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'musica' ? 'track-level' : ''}`;
-    row.innerHTML = `<span><strong>[${type.toUpperCase()}]</strong> ${title}</span>
+    row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'mídia' ? 'track-level' : ''}`;
+    
+    // Troca automatica de icones visando mídias gerais e pastas expansivas
+    let icon = '<i class="fas fa-folder"></i>';
+    if(type === 'subcategoria') icon = '<i class="fas fa-video"></i>';
+    if(type === 'mídia') icon = '<i class="fas fa-play-circle"></i>';
+
+    row.innerHTML = `<span>${icon} <strong>[${type.toUpperCase()}]</strong> ${title}</span>
         <div class="crud-actions">
-            <button class="crud-btn btn-edit" title="Editar Dados"><i class="fas fa-edit"></i></button>
+            <button class="crud-btn btn-edit" title="Editar"><i class="fas fa-edit"></i></button>
             <button class="crud-btn btn-del" title="Excluir"><i class="fas fa-trash"></i></button>
-            <button class="crud-btn btn-exp" title="Exportar JSON"><i class="fas fa-download"></i></button>
+            <button class="crud-btn btn-exp" title="Exportar Bloco"><i class="fas fa-download"></i></button>
         </div>`;
         
-    row.querySelector('.btn-edit').onclick = (e) => { e.preventDefault(); onEdit(); };
-    row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); onDel(); };
-    row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); onExp(); };
+    row.querySelector('.btn-edit').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onEdit(); };
+    row.querySelector('.btn-del').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onDel(); };
+    row.querySelector('.btn-exp').onclick = (e) => { e.preventDefault(); e.stopPropagation(); onExp(); };
     return row;
 }
 
@@ -678,13 +808,10 @@ function setupEventListeners() {
     document.getElementById('btn-close-player').onpointerdown = (e) => {
         e.preventDefault();
         if(ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(err){} }
-        
-        // Limpa e silencia os reprodutores locais imediatamente ao fechar a janela
         document.getElementById('universal-player').src = ""; 
         const rawPlayer = document.getElementById('raw-player');
         rawPlayer.pause();
         rawPlayer.src = "";
-
         document.getElementById('player-container').classList.add('hidden');
     };
 }
