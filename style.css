@@ -35,7 +35,7 @@ body {
 }
 .modal-content.admin-box { max-width: 750px; max-height: 85vh; overflow-y: auto; }
 
-/* ESTILIZAÇÃO DA LOGOTIPO DE 128x128 NO LOGIN */
+/* Estilização da Logotipo de 128x128 no Login */
 .login-logo {
     width: 128px;
     height: 128px;
