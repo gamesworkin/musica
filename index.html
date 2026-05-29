@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediaHub by Di Workin'</title>
+    <title>StreamHub - Reprodutor de Mídia Pessoal</title>
     
     <link rel="icon" type="image/x-icon" href="fav.ico">
     
@@ -15,9 +15,9 @@
     <div id="login-screen" class="modal-overlay">
         <div class="login-box">
             <img src="logo1.png" alt="Logotipo StreamHub" class="login-logo">
-            <h2><i class="fab fa-youtube text-red"></i> MediaHub do Di</h2>
-            <input type="text" id="login-user" placeholder="Digite seu usuário">
-            <input type="password" id="login-pass" placeholder="Digite sua senha">
+            <h2><i class="fab fa-youtube text-red"></i> Meu Reprodutor YouTube</h2>
+            <input type="text" id="login-user" placeholder="Digite seu usuário de acesso">
+            <input type="password" id="login-pass" placeholder="Digite sua senha de acesso">
             <button id="btn-login">Entrar</button>
         </div>
     </div>
@@ -26,7 +26,7 @@
         <header class="main-header">
             <div class="header-left">
                 <button id="toggle-sidebar" class="icon-btn"><i class="fas fa-bars"></i></button>
-                <div class="logo">Media<span>Hub</span></div>
+                <div class="logo">Stream<span>Hub</span></div>
             </div>
             
             <div class="search-container">
@@ -46,7 +46,7 @@
                     <i class="fas fa-search"></i>
                     <input type="text" id="search-internal-input" placeholder="Filtrar categorias ou mídias...">
                 </div>
-                <h3>Conteúdo</h3>
+                <h3>Categorias</h3>
                 <ul id="sidebar-tree" class="tree-menu">
                     </ul>
             </nav>
@@ -88,6 +88,7 @@
             
             <div class="admin-tabs">
                 <button class="tab-btn active" data-tab="add-tab" id="tab-trigger-add">Adicionar Mídia</button>
+                <button class="tab-btn" data-tab="channel-tab" id="tab-trigger-channel">Vincular Canal Dinâmico</button>
                 <button class="tab-btn" data-tab="manage-tab" id="tab-trigger-manage">Editar / Excluir / Exportar</button>
             </div>
 
@@ -106,6 +107,27 @@
                     <input type="text" id="media-subcategory" placeholder="Subcategoria (ex: Saga de Luara) - Digite Manualmente">
                 </div>
                 <button id="btn-save-media" class="save-btn"><i class="fas fa-save"></i> Salvar no meu Firebase</button>
+            </div>
+
+            <div id="channel-tab" class="tab-content hidden">
+                <div class="form-group row">
+                    <input type="text" id="search-channel-input" placeholder="Digite o nome do canal do YouTube que quer buscar...">
+                    <button id="btn-search-channel" class="accent-btn" style="width: auto; white-space: nowrap; margin: 0;"><i class="fas fa-search"></i> Buscar Canal</button>
+                </div>
+
+                <div class="preview-box" id="channel-preview" style="text-align: left; display: none;">
+                    <img id="chan-thumb" src="https://placehold.co/80x80?text=Canal" alt="Avatar Canal" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
+                    <div style="flex: 1;">
+                        <h4 id="chan-title-text" style="color: #fff; margin-bottom: 0.3rem;">Nenhum canal selecionado</h4>
+                        <p id="chan-desc-text" style="font-size: 0.8rem; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"></p>
+                    </div>
+                </div>
+
+                <div class="form-group" style="text-align: left; margin-top: 1rem;">
+                    <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Vincular à Categoria:</label>
+                    <input type="text" id="channel-target-category" placeholder="Digite a Categoria existente (ex: Luiz do Som) ou uma nova">
+                </div>
+                <button id="btn-save-channel-link" class="save-btn" style="background: #8e44ad;"><i class="fas fa-link"></i> Ativar Subcategoria "Vídeos Recentes"</button>
             </div>
 
             <div id="manage-tab" class="tab-content hidden">
