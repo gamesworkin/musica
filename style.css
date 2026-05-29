@@ -69,11 +69,11 @@ body {
 
 .wrapper { display: flex; height: calc(100vh - 60px); position: relative; }
 
-/* Sidebar Retrátil */
+/* SIDEBAR RETRÁTIL CORRIGIDA (DESKTOP E MOBILE) */
 .sidebar {
     width: 260px; background: var(--bg-sidebar); padding: 1.5rem;
     border-right: 1px solid var(--border); overflow-y: auto; 
-    transition: width 0.3s ease, padding 0.3s ease, transform 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease, padding 0.3s ease;
 }
 .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
 
@@ -164,7 +164,7 @@ button:hover { background: var(--accent-hover); }
 .search-btn-group { display: flex; gap: 4px; margin-top: 5px; width: 100%; }
 .search-btn-group button { padding: 4px 8px; margin: 0; font-size: 0.75rem; border-radius: 3px; font-weight: normal; }
 
-/* Responsividade Mobile */
+/* COMPORTAMENTO MOBILE RESPONSIVO REPARADO */
 @media (max-width: 768px) {
     .logo { display: none; }
     
@@ -174,15 +174,14 @@ button:hover { background: var(--accent-hover); }
         top: 60px; 
         bottom: 0; 
         z-index: 99999 !important; 
-        transform: translateX(-100%); 
         width: 260px !important; 
         padding: 1.5rem !important; 
         border-right: 1px solid var(--border);
         background: var(--bg-sidebar) !important;
-        display: block !important;
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        transform: translateX(-100%); /* Retraído por padrão no celular */
     }
     
+    /* Quando a classe open for injetada via JS no mobile, o menu desliza na tela */
     .sidebar.open { transform: translateX(0) !important; }
     .sidebar.collapsed { transform: translateX(-100%) !important; }
     
