@@ -2,10 +2,10 @@
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
 const CONFIG = {
-    ADMIN_USER: "diegosilvaeo",       
-    ADMIN_PASSWORD: "arcnet2154",     
-    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
-    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/musicas.json 
+    ADMIN_USER: "admin",       
+    ADMIN_PASSWORD: "123",     
+    YT_API_KEY: "SUA_YOUTUBE_API_KEY_V3",
+    FIREBASE_URL: "https://SEU-PROJETO.firebaseio.com/musicas.json" 
 };
 
 // Estado Global da Aplicação
@@ -25,7 +25,7 @@ let expandedCrudCats = {};
 let expandedCrudSubs = {};
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO E ENTER
+// 1. AUTENTICAÇÃO COM SESSÃO E ENTER (CORRIGIDO)
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
@@ -47,18 +47,38 @@ function configurarEventosLogin() {
     const btnLogin = document.getElementById('btn-login');
 
     if (inputUser) {
-        inputUser.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') inputPass.focus();
+        // Remove ouvintes antigos para evitar duplicação de cliques no mobile
+        const cloneUser = inputUser.cloneNode(true);
+        inputUser.parentNode.replaceChild(cloneUser, inputUser);
+        
+        document.getElementById('login-user').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('login-pass').focus();
+            }
         });
     }
 
     if (inputPass) {
-        inputPass.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleLogin();
+        const clonePass = inputPass.cloneNode(true);
+        inputPass.parentNode.replaceChild(clonePass, inputPass);
+
+        document.getElementById('login-pass').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleLogin();
+            }
         });
     }
 
-    if (btnLogin) btnLogin.addEventListener('click', handleLogin);
+    if (btnLogin) {
+        const cloneBtn = btnLogin.cloneNode(true);
+        btnLogin.parentNode.replaceChild(cloneBtn, btnLogin);
+        document.getElementById('btn-login').addEventListener('click', (e) => {
+            e.preventDefault();
+            handleLogin();
+        });
+    }
 }
 
 function handleLogin() {
@@ -352,7 +372,7 @@ function configurarEventosBuscaCanal() {
     const btnSaveChanLink = document.getElementById("btn-save-channel-link");
 
     if (btnSearchChan) {
-        btnSearchChan.onpointerdown = async (e) => {
+        btnSearchChan.onclick = async (e) => {
             e.preventDefault();
             const termo = document.getElementById("search-channel-input").value.trim();
             if(!termo) return alert("Digite o nome de um canal.");
@@ -381,7 +401,7 @@ function configurarEventosBuscaCanal() {
     }
 
     if (btnSaveChanLink) {
-        btnSaveChanLink.onpointerdown = async (e) => {
+        btnSaveChanLink.onclick = async (e) => {
             e.preventDefault();
             const catDestino = document.getElementById("channel-target-category").value;
             if(!canalSelecionadoProvisorio || !catDestino) return alert("Preencha todos os dados e selecione a categoria.");
@@ -544,7 +564,7 @@ function openAdminWithTrack(item) {
 }
 
 // ==========================================
-// 6. CHAVEAMENTO TRIPLO DO PLAYER (CORRIGIDO)
+// 6. CHAVEAMENTO TRIPLO DO PLAYER
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return;
@@ -572,7 +592,6 @@ function playTrack(index) {
     const linkOriginal = track.link.trim();
     const linkLower = linkOriginal.toLowerCase();
     
-    // Captura o ID do vídeo de forma garantida usando Regex unificado
     const vId = extractYoutubeId(linkOriginal);
 
     if(vId) {
@@ -580,11 +599,7 @@ function playTrack(index) {
         if (!ytPlayer) {
             ytPlayer = new YT.Player('yt-player', {
                 videoId: vId,
-                playerVars: { 
-                    'autoplay': 1, 
-                    'playsinline': 1,
-                    'enablejsapi': 1 
-                },
+                playerVars: { 'autoplay': 1, 'playsinline': 1, 'enablejsapi': 1 },
                 events: { 
                     'onStateChange': (e) => { 
                         if(e.data === 0 && currentTrackIndex + 1 < currentPlaylist.length) {
@@ -593,9 +608,7 @@ function playTrack(index) {
                     } 
                 }
             });
-        } else { 
-            ytPlayer.loadVideoById(vId); 
-        }
+        } else { ytPlayer.loadVideoById(vId); }
     } 
     else if(linkLower.endsWith('.mp4') || linkLower.endsWith('.mkv') || linkLower.endsWith('.avi') || linkLower.includes('raw.githubusercontent')) {
         if (rawPlayerEl) {
@@ -613,17 +626,12 @@ function playTrack(index) {
     }
 }
 
-// FUNÇÃO EXTRATORA CONTRA QUALQUER FORMATO DE LINK DO YOUTUBE
 function extractYoutubeId(url) {
     if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|\/shorts\/)([^#\&\?]*).*/;
     const match = url.match(regExp);
-    if (match && match[2].length === 11) {
-        return match[2];
-    }
-    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) {
-        return url.trim();
-    }
+    if (match && match[2].length === 11) return match[2];
+    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) return url.trim();
     return null;
 }
 
@@ -649,9 +657,7 @@ function renderCrudManager() {
                 saveState();
             }
         }, () => {
-            if(confirm(`Excluir toda a categoria "${cat}"?`)) {
-                deletarCategoriaCompleta(cat);
-            }
+            if(confirm(`Excluir toda a categoria "${cat}"?`)) deletarCategoriaCompleta(cat);
         }, () => {
             downloadJSON(database.filter(item => item.categoria === cat), `categoria_${cat}`);
         });
@@ -696,7 +702,7 @@ function renderCrudManager() {
                 database.forEach((item, idx) => {
                     if(item.categoria === cat && item.subcategoria === sub) {
                         const mediaRow = createCrudRow(item.título, 'mídia', () => openAdvancedEditModal(idx), () => {
-                            if(confirm(`Excluir mídia?`)) { deletarMidiaUnica(item); }
+                            if(confirm(`Excluir mídia?`)) deletarMidiaUnica(item);
                         }, () => downloadJSON(item, item.título));
                         mediaContainer.appendChild(mediaRow);
                     }
@@ -825,11 +831,9 @@ function downloadJSON(obj, filename) {
     document.body.appendChild(a); a.click(); a.remove();
 }
 
-// SINCRONIA DO MENU HAMBÚRGUER UNIFICADO (FIXED PARA DESKTOP E MOBILE)
 function handleToggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
-    
     if (window.innerWidth <= 768) {
         sidebar.classList.toggle('open');
         sidebar.classList.remove('collapsed');
@@ -845,7 +849,6 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
     
     const triggerBtn = document.getElementById(activeTriggerBtnId);
     const targetTab = document.getElementById(targetTabId);
-    
     if (triggerBtn) triggerBtn.classList.add('active');
     if (targetTab) targetTab.classList.remove('hidden');
 }
@@ -931,10 +934,7 @@ function setupEventListeners() {
             const univPlayer = document.getElementById('universal-player');
             if (univPlayer) univPlayer.src = "";
             const rp = document.getElementById('raw-player'); 
-            if (rp) {
-                rp.pause(); 
-                rp.src = "";
-            }
+            if (rp) { rp.pause(); rp.src = ""; }
             const pContainer = document.getElementById('player-container');
             if (pContainer) pContainer.classList.add('hidden');
         };
@@ -943,8 +943,6 @@ function setupEventListeners() {
     configurarEventosBuscaCanal();
 }
 
-// Inicialização de Sessão
-window.onload = () => {
-    configurarEventosLogin();
-    checkSession();
-};
+// Inicialização imediata dos eventos de escuta do formulário
+configurarEventosLogin();
+checkSession();
