@@ -1,125 +1,303 @@
 // ==========================================
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
-const YOUTUBE_API_KEY = "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ"; // Substitua pela sua chave da API do YouTube
-const FIREBASE_URL = "https://workin--music-default-rtdb.firebaseio.com/musicas.json"; // Substitua pela URL do seu Realtime Database (com o .json no final nas requisições)
-
-// Autenticação simples em memória
-const AUTH_USER = "diegosilvaeo";
-const AUTH_PASS = "arcnet2154";
+const CONFIG = {
+    ADMIN_USER: "diegosilvaeo",       
+    ADMIN_PASSWORD: "arcnet2154",     
+    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
+    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/musicas.json" 
+};
 
 // Estado Global da Aplicação
-let bancoMidias = [];
+let database = [];
 let canaisDinamicos = {};
-let categoriaAtual = "";
-let subcategoriaAtual = "";
-let ytPlayerInstance = null;
+let currentView = 'categories'; 
+let selectedCategory = '';
+let selectedSubcategory = '';
+let currentPlaylist = [];
+let currentTrackIndex = 0;
+let ytPlayer = null;
+let lastYtSearchResults = []; 
+let activeEditingIndex = null;
 let canalSelecionadoProvisorio = null;
 
+let expandedCrudCats = {};
+let expandedCrudSubs = {};
+
 // ==========================================
-// INICIALIZAÇÃO E CONTROLE DE TELAS
+// 1. AUTENTICAÇÃO COM SESSÃO E SUPORTE A ENTER
 // ==========================================
-document.addEventListener("DOMContentLoaded", () => {
-    configurarEventosLogin();
-    configurarEventosInterface();
-    configurarEventosAbasAdmin();
-    configurarEventosAdmin();
-    configurarEventosBuscaCanal();
-});
+function checkSession() {
+    const loginData = localStorage.getItem('streamhub_session');
+    if (loginData) {
+        const session = JSON.parse(loginData);
+        if (Date.now() - session.timestamp < 2 * 60 * 60 * 1000) {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-container').classList.remove('hidden');
+            initApp();
+            return;
+        }
+    }
+    handleLogoutActions();
+}
 
 function configurarEventosLogin() {
-    const btnLogin = document.getElementById("btn-login");
-    const inputUser = document.getElementById("login-user");
-    const inputPass = document.getElementById("login-pass");
+    const inputUser = document.getElementById('login-user');
+    const inputPass = document.getElementById('login-pass');
+    const btnLogin = document.getElementById('btn-login');
 
-    btnLogin.addEventListener("click", () => {
-        if (inputUser.value === AUTH_USER && inputPass.value === AUTH_PASS) {
-            document.getElementById("login-screen").classList.add("hidden");
-            document.getElementById("app-container").classList.remove("hidden");
-            inicializarSistema();
-        } else {
-            alert("Usuário ou senha incorretos!");
-        }
+    inputUser.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') inputPass.focus();
     });
 
-    inputPass.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") btnLogin.click();
+    inputPass.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleLogin();
     });
+
+    btnLogin.addEventListener('click', handleLogin);
 }
 
-async function inicializarSistema() {
+function handleLogin() {
+    const inputUser = document.getElementById('login-user').value.trim();
+    const inputPass = document.getElementById('login-pass').value.trim();
+    
+    if (inputUser === CONFIG.ADMIN_USER && inputPass === CONFIG.ADMIN_PASSWORD) {
+        localStorage.setItem('streamhub_session', JSON.stringify({ user: inputUser, timestamp: Date.now() }));
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app-container').classList.remove('hidden');
+        initApp();
+    } else {
+        alert("Usuário ou senha incorretos!");
+    }
+}
+
+function handleLogoutActions() {
+    localStorage.removeItem('streamhub_session');
+    if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e){} }
+    document.getElementById('app-container').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+}
+
+// ==========================================
+// 2. INICIALIZAÇÃO E CARGA DO FIREBASE (CORRIGIDO)
+// ==========================================
+async function initApp() {
     await carregarCanaisDinamicos();
-    await carregarDadosFirebase();
-    renderizarMenuLateral();
-    exibirMosaicoInicial();
-}
-
-// ==========================================
-// INTEGRAÇÃO COM FIREBASE (CARGA E SALVAMENTO)
-// ==========================================
-async function carregarDadosFirebase() {
+    
+    // Conexão e tratamento do nó principal de mídias
     try {
-        const response = await fetch(`${FIREBASE_URL}/midias.json`);
-        const dados = await response.json();
-        bancoMidias = [];
-        if (dados) {
-            // Converte o objeto do Firebase em array mantendo a chave idêntica do Firebase (ID)
-            Object.keys(dados).forEach(key => {
-                if (dados[key]) {
-                    bancoMidias.push({ idFirebase: key, ...dados[key] });
-                }
-            });
+        const res = await fetch(CONFIG.FIREBASE_URL);
+        const data = await res.json();
+        database = [];
+        if (data) {
+            // Mapeia o objeto linear tratando arrays e objetos sem quebrar chaves acentuadas
+            if (Array.isArray(data)) {
+                database = data.filter(item => item !== null);
+            } else {
+                Object.keys(data).forEach(key => {
+                    if (data[key]) database.push({ idFirebase: key, ...data[key] });
+                });
+            }
         }
-    } catch (error) {
-        console.error("Erro ao carregar dados do Firebase:", error);
+    } catch (e) {
+        console.log("Erro ao carregar mídias, usando array local.", e);
+    } finally {
+        renderSidebar();
+        renderMosaic();
+        setupEventListeners();
     }
 }
 
 async function carregarCanaisDinamicos() {
     try {
-        const response = await fetch(`${FIREBASE_URL}/canais_dinamicos.json`);
-        const dados = await response.json();
-        canaisDinamicos = dados || {};
-    } catch (error) {
-        console.error("Erro ao carregar canais dinâmicos:", error);
+        // Encurta a URL base do Firebase para localizar o nó de canais
+        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+        const res = await fetch(`${baseUrl}/canais_dinamicos.json`);
+        const data = await res.json();
+        canaisDinamicos = data || {};
+    } catch (e) {
+        console.error("Erro ao carregar canais dinâmicos:", e);
     }
 }
 
-async function salvarMidiaNoFirebase(novaMidia) {
-    try {
-        await fetch(`${FIREBASE_URL}/midias.json`, {
-            method: "POST",
-            body: JSON.stringify(novaMidia),
-            headers: { "Content-Type": "application/json" }
+// ==========================================
+// 3. RENDERIZAÇÃO DO MOSAICO
+// ==========================================
+function renderMosaic() {
+    const grid = document.getElementById('mosaic-grid');
+    grid.innerHTML = '';
+
+    document.getElementById('bc-category').classList.add('hidden');
+    document.getElementById('bc-subcategory').classList.add('hidden');
+    document.getElementById('bc-search').classList.add('hidden');
+
+    if (currentView === 'categories') {
+        const categories = [...new Set(database.map(item => item.categoria))];
+        categories.forEach(cat => {
+            if(!cat) return;
+            const match = database.find(item => item.categoria === cat);
+            grid.appendChild(createCard(cat, match ? match.capa : '', false, false, () => {
+                selectedCategory = cat;
+                currentView = 'subcategories';
+                renderMosaic();
+            }, -1));
         });
-        await inicializarSistema();
-    } catch (error) {
-        alert("Erro ao salvar mídia no Firebase.");
+    } 
+    else if (currentView === 'subcategories') {
+        document.getElementById('bc-category').classList.remove('hidden');
+        document.getElementById('bc-category').querySelector('.txt').innerText = selectedCategory;
+
+        const subcategories = [...new Set(database.filter(item => item.categoria === selectedCategory).map(item => item.subcategoria))];
+        
+        // Verifica se há canal associado a esta categoria para injetar subcategoria virtual
+        const nodeName = btoa(unescape(encodeURIComponent(selectedCategory))).replace(/=/g, "");
+        if (canaisDinamicos[nodeName] && !subcategories.includes("Vídeos Recentes")) {
+            subcategories.push("Vídeos Recentes");
+        }
+
+        subcategories.forEach(sub => {
+            const match = database.find(item => item.categoria === selectedCategory && item.subcategoria === sub);
+            grid.appendChild(createCard(sub, match ? match.capa : (canaisDinamicos[nodeName] ? canaisDinamicos[nodeName].thumb : ''), false, false, () => {
+                selectedSubcategory = sub;
+                currentView = 'tracks';
+                renderMosaic();
+            }, -1));
+        });
+    } 
+    else if (currentView === 'tracks') {
+        document.getElementById('bc-category').classList.remove('hidden');
+        document.getElementById('bc-category').querySelector('.txt').innerText = selectedCategory;
+        document.getElementById('bc-subcategory').classList.remove('hidden');
+        document.getElementById('bc-subcategory').querySelector('.txt').innerText = selectedSubcategory;
+
+        if (selectedSubcategory === "Vídeos Recentes") {
+            const nodeName = btoa(unescape(encodeURIComponent(selectedCategory))).replace(/=/g, "");
+            if (canaisDinamicos[nodeName]) {
+                buscarVideosRecentesDoCanal(canaisDinamicos[nodeName].uploadsPlaylistId);
+            }
+        } else {
+            currentPlaylist = database.filter(item => item.categoria === selectedCategory && item.subcategoria === selectedSubcategory);
+            currentPlaylist.forEach((track, index) => {
+                const realIndex = database.findIndex(dbItem => dbItem.link === track.link && dbItem.título === track.título);
+                grid.appendChild(createCard(track.título, track.capa, false, false, () => {
+                    playTrack(index);
+                }, realIndex));
+            });
+        }
+    }
+    else if (currentView === 'search_results') {
+        document.getElementById('bc-search').classList.remove('hidden');
+        lastYtSearchResults.forEach(item => {
+            const isPlaylist = item.type === 'playlist';
+            const card = createCard(item.title, item.thumb, true, isPlaylist, null, -1);
+            
+            card.querySelector('.add-music-badge').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                openAdminWithTrack(item);
+            };
+
+            const btnGroup = document.createElement('div');
+            btnGroup.className = 'search-btn-group';
+            
+            const btnPlay = document.createElement('button');
+            btnPlay.style.background = '#2980b9';
+            btnPlay.innerHTML = `<i class="fas fa-play"></i> Assistir`;
+            btnPlay.onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                let fakeTrack = { título: item.title, link: isPlaylist ? `https://www.youtube.com/playlist?list=${item.youtubeId}` : `https://www.youtube.com/embed/${item.youtubeId}` };
+                currentPlaylist = [fakeTrack];
+                playTrack(0);
+            };
+            btnGroup.appendChild(btnPlay);
+
+            if(isPlaylist) {
+                const btnList = document.createElement('button');
+                btnList.style.background = '#8e44ad';
+                btnList.innerHTML = `<i class="fas fa-list"></i> Ver Mídias`;
+                btnList.onclick = (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    peekPlaylistContents(item.youtubeId);
+                };
+                btnGroup.appendChild(btnList);
+            }
+
+            card.appendChild(btnGroup);
+            grid.appendChild(card);
+        });
     }
 }
 
-// ==========================================
-// MECANISMO DE CANAIS DINÂMICOS (YOUTUBE API)
-// ==========================================
-function configurarEventosBuscaCanal() {
-    const btnSearchChannel = document.getElementById("btn-search-channel");
-    const searchChannelInput = document.getElementById("search-channel-input");
-    const btnSaveChannelLink = document.getElementById("btn-save-channel-link");
+function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback, realIndex = -1) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    let htmlContent = `<img src="${imgSrc || 'https://placehold.co/160x90?text=Sem+Capa'}"><h4>${title}</h4>`;
+    if(isPlaylist) htmlContent += `<span class="media-type-badge"><i class="fas fa-photo-film"></i> Playlist</span>`;
+    if(showAddButton) {
+        const btnText = isPlaylist ? "Add Playlist" : "Adicionar";
+        htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> ${btnText}</button>`;
+    }
+    
+    if(realIndex >= 0) {
+        htmlContent += `<div class="quick-edit-badge" title="Editar esta mídia"><i class="fas fa-cog"></i></div>`;
+    }
 
-    btnSearchChannel.addEventListener("click", async () => {
-        const termo = searchChannelInput.value.trim();
-        if (!termo) return alert("Digite o nome de um canal para pesquisar.");
+    card.innerHTML = htmlContent;
+    if(clickCallback) card.addEventListener('click', clickCallback);
+
+    if(realIndex >= 0) {
+        card.querySelector('.quick-edit-badge').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            openAdvancedEditModal(realIndex);
+        });
+    }
+
+    return card;
+}
+
+// ==========================================
+// 4. CHAMADAS DA API DE CANAIS DINÂMICOS
+// ==========================================
+async function buscarVideosRecentesDoCanal(playlistId) {
+    document.getElementById('mosaic-grid').innerHTML = '<h3>Atualizando vídeos recentes do canal via API...</h3>';
+    const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=15&playlistId=${playlistId}&key=${CONFIG.YT_API_KEY}`;
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if(data.items) {
+            currentPlaylist = data.items.map(item => ({
+                título: item.snippet.title,
+                link: `https://www.youtube.com/embed/${item.snippet.resourceId.videoId}`,
+                capa: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
+                categoria: selectedCategory,
+                subcategoria: "Vídeos Recentes",
+                isDinâmico: true
+            }));
+            
+            const grid = document.getElementById('mosaic-grid');
+            grid.innerHTML = '';
+            currentPlaylist.forEach((track, index) => {
+                grid.appendChild(createCard(track.título, track.capa, false, false, () => {
+                    playTrack(index);
+                }, -1));
+            });
+        }
+    } catch (e) {
+        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro ao carregar feeds do canal.</h3>';
+    }
+}
+
+function configurarEventosBuscaCanal() {
+    document.getElementById("btn-search-channel").onpointerdown = async (e) => {
+        e.preventDefault();
+        const termo = document.getElementById("search-channel-input").value.trim();
+        if(!termo) return alert("Digite o nome de um canal.");
 
         try {
-            // Busca o canal por nome textualmente usando a API do YouTube
-            const urlSearch = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(termo)}&key=${YOUTUBE_API_KEY}`;
-            const res = await fetch(urlSearch);
+            const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(termo)}&key=${CONFIG.YT_API_KEY}`;
+            const res = await fetch(url);
             const data = await res.json();
 
-            if (!data.items || data.items.length === 0) {
-                alert("Nenhum canal correspondente encontrado no YouTube.");
-                return;
-            }
+            if(!data.items || data.items.length === 0) return alert("Nenhum canal localizado.");
 
             const item = data.items[0];
             canalSelecionadoProvisorio = {
@@ -129,34 +307,21 @@ function configurarEventosBuscaCanal() {
                 description: item.snippet.description
             };
 
-            // Atualiza a pré-visualização na interface
             document.getElementById("chan-thumb").src = canalSelecionadoProvisorio.thumb;
             document.getElementById("chan-title-text").innerText = canalSelecionadoProvisorio.title;
-            document.getElementById("chan-desc-text").innerText = canalSelecionadoProvisorio.description || "Sem descrição disponível.";
+            document.getElementById("chan-desc-text").innerText = canalSelecionadoProvisorio.description;
             document.getElementById("channel-preview").style.display = "flex";
+        } catch(err) { alert("Erro na API."); }
+    };
 
-        } catch (err) {
-            console.error(err);
-            alert("Erro ao consultar a API do YouTube.");
-        }
-    });
-
-    btnSaveChannelLink.addEventListener("click", async () => {
-        const categoriaDestino = document.getElementById("channel-target-category").value.trim();
-        if (!canalSelecionadoProvisorio) return alert("Busque e selecione um canal primeiro.");
-        if (!categoriaDestino) return alert("Especifique a categoria em que o canal será inserido.");
+    document.getElementById("btn-save-channel-link").onpointerdown = async (e) => {
+        e.preventDefault();
+        const catDestino = document.getElementById("channel-target-category").value.trim();
+        if(!canalSelecionadoProvisorio || !catDestino) return alert("Preencha todos os dados.");
 
         try {
-            // Captura o ID da playlist contendo todos os uploads do canal de forma otimizada
-            const urlDetails = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${canalSelecionadoProvisorio.channelId}&key=${YOUTUBE_API_KEY}`;
-            const resDetails = await fetch(urlDetails);
-            const dataDetails = await resDetails.json();
-            
-            let uploadsListId = canalSelecionadoProvisorio.channelId.replace(/^UC/, "UU"); 
-            if (dataDetails.items && dataDetails.items[0].contentDetails.relatedPlaylists.uploads) {
-                uploadsListId = dataDetails.items[0].contentDetails.relatedPlaylists.uploads;
-            }
-
+            const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+            const uploadsListId = canalSelecionadoProvisorio.channelId.replace(/^UC/, "UU");
             const payload = {
                 channelId: canalSelecionadoProvisorio.channelId,
                 uploadsPlaylistId: uploadsListId,
@@ -164,765 +329,431 @@ function configurarEventosBuscaCanal() {
                 thumb: canalSelecionadoProvisorio.thumb
             };
 
-            // Salva a amarração do canal associado à categoria desejada
-            // Sanitiza o nome da categoria para evitar problemas de nós no Firebase
-            const nodeName = btoa(unescape(encodeURIComponent(categoriaDestino))).replace(/=/g, "");
-            await fetch(`${FIREBASE_URL}/canais_dinamicos/${nodeName}.json`, {
-                method: "SET",
+            const nodeName = btoa(unescape(encodeURIComponent(catDestino))).replace(/=/g, "");
+            await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, {
+                method: "PUT",
                 body: JSON.stringify(payload)
             });
 
-            alert(`Canal "${canalSelecionadoProvisorio.title}" vinculado com sucesso à categoria "${categoriaDestino}"!`);
-            
-            // Reseta campos da aba
+            alert("Canal vinculado com sucesso!");
             document.getElementById("channel-preview").style.display = "none";
             document.getElementById("search-channel-input").value = "";
             document.getElementById("channel-target-category").value = "";
             canalSelecionadoProvisorio = null;
+            initApp();
+        } catch(err) { alert("Erro ao salvar canal."); }
+    };
+}
 
-            await inicializarSistema();
+// ==========================================
+// 5. COMPONENTES DE INTERFACE E EVENTOS
+// ==========================================
+function renderSidebar() {
+    const tree = document.getElementById('sidebar-tree');
+    tree.innerHTML = '';
 
-        } catch (err) {
-            console.error(err);
-            alert("Erro ao salvar vínculo dinâmico no Firebase.");
-        }
+    const categories = [...new Set(database.map(item => item.categoria))];
+    
+    // Injeta categorias órfãs vindas dos canais dinâmicos
+    Object.keys(canaisDinamicos).forEach(key => {
+        try {
+            const catNome = decodeURIComponent(escape(atob(key)));
+            if(!categories.includes(catNome)) categories.push(catNome);
+        } catch(e){}
+    });
+
+    categories.sort().forEach(cat => {
+        if(!cat) return;
+        const catLi = document.createElement('li');
+        const catToggle = document.createElement('span');
+        catToggle.className = 'category-toggle';
+        catToggle.innerHTML = `<i class="fas fa-folder"></i> ${cat}`;
+        
+        const subUl = document.createElement('ul');
+        subUl.className = 'tree-sub hidden';
+
+        catToggle.addEventListener('click', () => subUl.classList.toggle('hidden'));
+
+        const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
+        
+        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
+        if(canaisDinamicos[nodeName]) subcategories.push("Vídeos Recentes");
+
+        subcategories.sort().forEach(sub => {
+            if(!sub) return;
+            const subLi = document.createElement('li');
+            subLi.innerHTML = sub === "Vídeos Recentes" ? `<i class="fas fa-sync text-red"></i> <b>${sub}</b>` : `<i class="fas fa-photo-film"></i> ${sub}`;
+            subLi.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedCategory = cat;
+                selectedSubcategory = sub;
+                currentView = 'tracks';
+                renderMosaic();
+                if(window.innerWidth <= 768) handleToggleSidebar();
+            });
+            subUl.appendChild(subLi);
+        });
+
+        catLi.appendChild(catToggle);
+        catLi.appendChild(subUl);
+        tree.appendChild(catLi);
     });
 }
 
-// Captura os 15 vídeos mais novos de uma playlist de uploads diretamente da API do YouTube
-async function buscarVideosRecentesDoCanal(playlistId) {
+function filterInternalDatabase(query) {
+    const lowerQuery = query.toLowerCase().trim();
+    document.querySelectorAll('#sidebar-tree > li').forEach(catLi => {
+        const catName = catLi.querySelector('.category-toggle').innerText.toLowerCase();
+        let match = catName.includes(lowerQuery);
+        let subMatchAny = false;
+
+        catLi.querySelectorAll('.tree-sub li').forEach(subLi => {
+            const subName = subLi.innerText.toLowerCase();
+            const realCat = catLi.querySelector('.category-toggle').innerText.trim();
+            const realSub = subLi.innerText.trim();
+
+            const mediaMatch = database.some(item => 
+                item.categoria === realCat && item.subcategoria === realSub && item.título.toLowerCase().includes(lowerQuery)
+            );
+
+            if(subName.includes(lowerQuery) || mediaMatch || match) {
+                subLi.classList.remove('hidden'); subMatchAny = true;
+            } else { subLi.classList.add('hidden'); }
+        });
+
+        if(match || subMatchAny) catLi.classList.remove('hidden'); else catLi.classList.add('hidden');
+    });
+}
+
+async function searchYouTubeGlobal(query) {
+    if(!query.trim()) return;
+    currentView = 'search_results';
+    renderMosaic();
+    document.getElementById('mosaic-grid').innerHTML = '<h3>Buscando no YouTube...</h3>';
+
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=${encodeURIComponent(query)}&type=video,playlist&key=${CONFIG.YT_API_KEY}`;
     try {
-        const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=15&playlistId=${playlistId}&key=${YOUTUBE_API_KEY}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        
-        if (!data.items) return [];
-        return data.items.map(item => ({
-            título: item.snippet.title,
-            link: `https://www.youtube.com/watch?v=${item.snippet.resourceId.videoId}`,
-            capa: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : (item.snippet.thumbnails.high ? item.snippet.thumbnails.high.url : item.snippet.thumbnails.default.url),
-            categoria: "", 
-            subcategoria: "Vídeos Recentes",
-            isDinâmico: true
-        }));
+        const response = await fetch(url);
+        const data = await response.json();
+        lastYtSearchResults = [];
+        if(data.items) {
+            data.items.forEach(item => {
+                const isPl = item.id.kind === 'youtube#playlist';
+                lastYtSearchResults.push({
+                    type: isPl ? 'playlist' : 'video',
+                    youtubeId: isPl ? item.id.playlistId : item.id.videoId,
+                    title: item.snippet.title,
+                    thumb: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : 'https://placehold.co/300x200?text=Sem+Capa'
+                });
+            });
+        }
+        renderMosaic();
     } catch (e) {
-        console.error("Erro ao buscar vídeos dinâmicos:", e);
-        return [];
+        document.getElementById('mosaic-grid').innerHTML = '<h3>Erro na busca do YouTube.</h3>';
+    }
+}
+
+async function peekPlaylistContents(playlistId) {
+    const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${CONFIG.YT_API_KEY}`;
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if(data.items) {
+            let titles = data.items.map((item, idx) => `${idx + 1}. ${item.snippet.title}`).join('\n');
+            alert(`Mídias nesta Playlist:\n\n${titles.substring(0, 1500)}`);
+        }
+    } catch(e) { alert("Erro ao ler playlist."); }
+}
+
+// ==========================================
+// 6. CHAVEAMENTO TRIPLO DO PLAYER
+// ==========================================
+function playTrack(index) {
+    if(currentPlaylist.length === 0) return;
+    currentTrackIndex = index;
+    const track = currentPlaylist[index];
+
+    document.getElementById('player-container').classList.remove('hidden');
+    document.getElementById('current-track-title').innerText = track.título;
+
+    const ytPlayerEl = document.getElementById('yt-player');
+    const univPlayerEl = document.getElementById('universal-player');
+    const rawPlayerEl = document.getElementById('raw-player');
+
+    univPlayerEl.src = ""; rawPlayerEl.src = "";
+    univPlayerEl.classList.add('hidden'); rawPlayerEl.classList.add('hidden'); ytPlayerEl.classList.add('hidden');
+    rawPlayerEl.pause();
+
+    const linkLower = track.link.toLowerCase();
+
+    if(linkLower.includes('youtube.com') || linkLower.includes('youtu.be')) {
+        ytPlayerEl.classList.remove('hidden');
+        const vId = extractYoutubeId(track.link);
+        if (!ytPlayer) {
+            ytPlayer = new YT.Player('yt-player', {
+                videoId: vId,
+                playerVars: { 'autoplay': 1, 'playsinline': 1 },
+                events: { 'onStateChange': (e) => { if(e.data === 0 && currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); } }
+            });
+        } else { ytPlayer.loadVideoById(vId); }
+    } 
+    else if(linkLower.endsWith('.mp4') || linkLower.endsWith('.mkv') || linkLower.endsWith('.avi') || linkLower.includes('raw.githubusercontent')) {
+        rawPlayerEl.classList.remove('hidden');
+        rawPlayerEl.src = track.link;
+        rawPlayerEl.play();
+        rawPlayerEl.onended = () => { if(currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); };
+    } 
+    else {
+        univPlayerEl.classList.remove('hidden');
+        univPlayerEl.src = track.link.includes("archive.org/details/") ? track.link.replace("archive.org/details/", "archive.org/embed/") : track.link;
     }
 }
 
 // ==========================================
-// RENDERIZAÇÃO DA INTERFACE (MENU LATERAL E MOSAICO)
+// 7. ARVORE GERENCIAL SANFONA (CRUD)
 // ==========================================
-function renderizarMenuLateral() {
-    const sidebarTree = document.getElementById("sidebar-tree");
-    sidebarTree.innerHTML = "";
+function renderCrudManager() {
+    const listContainer = document.getElementById('crud-tree-list');
+    listContainer.innerHTML = '';
 
-    // Agrupa categorias e subcategorias estáticas do Firebase
-    const estrutura = {};
-    bancoMidias.forEach(midia => {
-        if (!estrutura[midia.categoria]) estrutura[midia.categoria] = new Set();
-        if (midia.subcategoria) estrutura[midia.categoria].add(midia.subcategoria);
+    const categories = [...new Set(database.map(item => item.categoria))];
+    Object.keys(canaisDinamicos).forEach(k => {
+        try { const c = decodeURIComponent(escape(atob(k))); if(!categories.includes(c)) categories.push(c); } catch(e){}
     });
 
-    // Mescla as categorias que possuem canais dinâmicos acoplados
-    Object.keys(canaisDinamicos).forEach(encodedKey => {
-        try {
-            const catNome = decodeURIComponent(escape(atob(encodedKey)));
-            if (!estrutura[catNome]) estrutura[catNome] = new Set();
-            estrutura[catNome].add("Vídeos Recentes"); // Injeta visualmente a subcategoria automatizada
-        } catch(e){}
-    });
-
-    // Monta o menu em árvore (Accordion)
-    Object.keys(estrutura).sort().forEach(cat => {
-        const liCat = document.createElement("li");
-        
-        const toggleSpan = document.createElement("span");
-        toggleSpan.className = "category-toggle";
-        toggleSpan.innerHTML = `<i class="fas fa-folder"></i> ${cat}`;
-        toggleSpan.addEventListener("click", () => selecionarCategoria(cat));
-        liCat.appendChild(toggleSpan);
-
-        const ulSub = document.createElement("ul");
-        ulSub.className = "tree-sub";
-
-        const subs = Array.from(estrutura[cat]).sort();
-        subs.forEach(sub => {
-            const liSub = document.createElement("li");
-            liSub.innerHTML = sub === "Vídeos Recentes" ? `<i class="fas fa-sync text-red"></i> <b>${sub}</b>` : `<i class="fas fa-folder-open"></i> ${sub}`;
-            liSub.addEventListener("click", (e) => {
-                e.stopPropagation();
-                selecionarSubcategoria(cat, sub);
-            });
-            ulSub.appendChild(liSub);
+    categories.sort().forEach(cat => {
+        if(!cat) return;
+        const catRow = createCrudRow(cat, 'categoria', () => {
+            let novo = prompt("Novo nome para a Categoria:", cat);
+            if(novo && novo.trim() !== "") {
+                database.forEach(item => { if(item.categoria === cat) item.categoria = novo.trim(); });
+                saveState();
+            }
+        }, () => {
+            if(confirm(`Excluir toda a categoria "${cat}"?`)) {
+                deletarCategoriaCompleta(cat);
+            }
+        }, () => {
+            downloadJSON(database.filter(item => item.categoria === cat), `categoria_${cat}`);
         });
 
-        liCat.appendChild(ulSub);
-        sidebarTree.appendChild(liCat);
+        const subContainer = document.createElement('div');
+        subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
+        catRow.addEventListener('click', (e) => {
+            if(e.target.closest('.crud-actions')) return;
+            expandedCrudCats[cat] = !expandedCrudCats[cat];
+            subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
+        });
+
+        listContainer.appendChild(catRow);
+
+        const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
+        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
+        if(canaisDinamicos[nodeName]) subcategories.push("Vídeos Recentes");
+
+        subcategories.sort().forEach(sub => {
+            const subRow = createCrudRow(sub, 'subcategoria', null, () => {
+                if(confirm(`Excluir subcategoria "${sub}"?`)) deletarSubcategoria(cat, sub);
+            }, () => {
+                downloadJSON(database.filter(item => item.categoria === cat && item.subcategoria === sub), `sub_${sub}`);
+            });
+
+            const mediaContainer = document.createElement('div');
+            mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
+            subRow.addEventListener('click', (e) => {
+                if(e.target.closest('.crud-actions')) return;
+                expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub];
+                mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
+            });
+
+            subContainer.appendChild(subRow);
+
+            if(sub === "Vídeos Recentes") {
+                const infoRow = document.createElement('div');
+                infoRow.className = 'crud-item track-level';
+                infoRow.innerHTML = `<span><i class="fas fa-link"></i> Canal Conectado: ${canaisDinamicos[nodeName].title}</span>`;
+                mediaContainer.appendChild(infoRow);
+            } else {
+                database.forEach((item, idx) => {
+                    if(item.categoria === cat && item.subcategoria === sub) {
+                        const mediaRow = createCrudRow(item.título, 'mídia', () => openAdvancedEditModal(idx), () => {
+                            if(confirm(`Excluir mídia?`)) { deletarMidiaUnica(item); }
+                        }, () => downloadJSON(item, item.título));
+                        mediaContainer.appendChild(mediaRow);
+                    }
+                });
+            }
+            subContainer.appendChild(mediaContainer);
+        });
+        listContainer.appendChild(subContainer);
     });
 }
 
-async function selecionarCategoria(cat) {
-    categoriaAtual = cat;
-    subcategoriaAtual = "";
-    atualizarBreadcrumb();
+function createCrudRow(title, type, onEdit, onDel, onExp) {
+    const row = document.createElement('div');
+    row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'mídia' ? 'track-level' : ''}`;
+    let icon = type === 'categoria' ? '<i class="fas fa-folder"></i>' : (type === 'subcategoria' ? '<i class="fas fa-video"></i>' : '<i class="fas fa-play-circle"></i>');
 
-    let listagemExibicao = bancoMidias.filter(m => m.categoria === cat);
+    row.innerHTML = `<span>${icon} <strong>[${type.toUpperCase()}]</strong> ${title}</span>
+        <div class="crud-actions">
+            ${onEdit ? '<button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>' : ''}
+            <button class="crud-btn btn-del"><i class="fas fa-trash"></i></button>
+            <button class="crud-btn btn-exp"><i class="fas fa-download"></i></button>
+        </div>`;
+    if(onEdit) row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
+    row.querySelector('.btn-del').onclick = (e) => { e.stopPropagation(); onDel(); };
+    row.querySelector('.btn-exp').onclick = (e) => { e.stopPropagation(); onExp(); };
+    return row;
+}
 
-    // Se a categoria possuir um canal dinâmico vinculado, busca os vídeos via API para mesclar na exibição
+// ==========================================
+// 8. PERSISTÊNCIA E OPERAÇÕES CRUD NO FIREBASE
+// ==========================================
+function openAdvancedEditModal(index) {
+    activeEditingIndex = index;
+    const item = database[index];
+    document.getElementById('edit-field-title').value = item.título || "";
+    document.getElementById('edit-field-link').value = item.link || "";
+    document.getElementById('edit-field-capa').value = item.capa || "";
+    document.getElementById('edit-field-category').value = item.categoria || "";
+    document.getElementById('edit-field-subcategory').value = item.subcategoria || "";
+    document.getElementById('edit-media-modal').classList.remove('hidden');
+}
+
+function saveAdvancedEditChanges(e) {
+    if(e) { e.preventDefault(); }
+    const t = document.getElementById('edit-field-title').value.trim();
+    const l = document.getElementById('edit-field-link').value.trim();
+    const c = document.getElementById('edit-field-capa').value.trim();
+    const cat = document.getElementById('edit-field-category').value.trim();
+    const sub = document.getElementById('edit-field-subcategory').value.trim();
+
+    if(!t || !l || !cat) return alert("Preencha os campos obrigatórios.");
+
+    database[activeEditingIndex].título = t;
+    database[activeEditingIndex].link = l;
+    database[activeEditingIndex].capa = c;
+    database[activeEditingIndex].categoria = cat;
+    database[activeEditingIndex].subcategoria = sub;
+
+    document.getElementById('edit-media-modal').classList.add('hidden');
+    saveState();
+}
+
+async function deletarMidiaUnica(item) {
+    if(item.idFirebase) {
+        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+        await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+    }
+    database = database.filter(i => i !== item);
+    saveState();
+}
+
+async function deletarSubcategoria(cat, sub) {
+    const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+    if(sub === "Vídeos Recentes") {
+        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
+        await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
+    } else {
+        const alvos = database.filter(item => item.categoria === cat && item.subcategoria === sub);
+        for(let item of alvos) {
+            if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+        }
+        database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
+    }
+    saveState();
+}
+
+async function deletarCategoriaCompleta(cat) {
+    const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+    const alvos = database.filter(item => item.categoria === cat);
+    for(let item of alvos) {
+        if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+    }
     const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-    if (canaisDinamicos[nodeName]) {
-        const videosDinamicos = await buscarVideosRecentesDoCanal(canaisDinamicos[nodeName].uploadsPlaylistId);
-        listagemExibicao = [...videosDinamicos, ...listagemExibicao];
-    }
-
-    renderizarMosaico(listagemExibicao);
-}
-
-async function selecionarSubcategoria(cat, sub) {
-    categoriaAtual = cat;
-    subcategoriaAtual = sub;
-    atualizarBreadcrumb();
-
-    if (sub === "Vídeos Recentes") {
-        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-        if (canaisDinamicos[nodeName]) {
-            const videosDinamicos = await buscarVideosRecentesDoCanal(canaisDinamicos[nodeName].uploadsPlaylistId);
-            renderizarMosaico(videosDinamicos);
-        } else {
-            renderizarMosaico([]);
-        }
-    } else {
-        const filtradas = bancoMidias.filter(m => m.categoria === cat && m.subcategoria === sub);
-        renderizarMosaico(filtradas);
-    }
-}
-
-function renderizarMosaico(lista) {
-    const grid = document.getElementById("mosaic-grid");
-    grid.innerHTML = "";
-
-    if (lista.length === 0) {
-        grid.innerHTML = `<p style="padding:1rem; color:var(--text-muted);">Nenhuma mídia cadastrada nesta seção.</p>`;
-        return;
-    }
-
-    lista.forEach(midia => {
-        const card = document.createElement("div");
-        card.className = "card";
-        
-        // Define o tipo de selo no mosaico
-        let badgeText = "LINK";
-        if (midia.isDinâmico) badgeText = "BÚSSOLA";
-        else if (midia.link.includes("youtube.com") || midia.link.includes("youtu.be")) badgeText = "YOUTUBE";
-        else if (midia.link.includes("archive.org")) badgeText = "ARCHIVE";
-        else if (midia.link.match(/\.(mp4|mkv|webm|ogg)$/i)) badgeText = "DIRETO";
-
-        card.innerHTML = `
-            <span class="media-type-badge">${badgeText}</span>
-            <img src="${midia.capa || 'https://placehold.co/160x90?text=Sem+Capa'}" alt="Capa" onerror="this.src='https://placehold.co/160x90?text=Erro+Capa'">
-            <h4>${midia.título}</h4>
-        `;
-
-        // Botão de Edição Rápida (Apenas para mídias estáticas salvas no Firebase)
-        if (!midia.isDinâmico) {
-            const editBtn = document.createElement("div");
-            editBtn.className = "quick-edit-badge";
-            editBtn.innerHTML = `<i class="fas fa-pencil-alt"></i>`;
-            editBtn.title = "Editar esta mídia";
-            editBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                abrirModalEdicaoAvancada(midia);
-            });
-            card.appendChild(editBtn);
-        }
-
-        card.addEventListener("click", () => iniciarReproducao(midia));
-        grid.appendChild(card);
-    });
-}
-
-function exibirMosaicoInicial() {
-    // Exibe as últimas 24 mídias adicionadas no Firebase por padrão na home
-    const ultimas = [...bancoMidias].reverse().slice(0, 24);
-    renderizarMosaico(ultimas);
-}
-
-// ==========================================
-// REPRODUTOR MULTI-ENGINE TRIPO INTEGRADO
-// ==========================================
-function iniciarReproducao(midia) {
-    const container = document.getElementById("player-container");
-    const ytIframe = document.getElementById("yt-player");
-    const universalPlayer = document.getElementById("universal-player");
-    const rawPlayer = document.getElementById("raw-player");
-    const titleTrack = document.getElementById("current-track-title");
-
-    // Reseta todos os players antes da carga
-    container.classList.remove("hidden");
-    ytIframe.classList.add("hidden");
-    universalPlayer.classList.add("hidden");
-    rawPlayer.classList.add("hidden");
+    await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
     
-    // Para vídeos em HTML5 brutos tocando de fundo
-    rawPlayer.pause();
-    rawPlayer.src = "";
+    database = database.filter(item => item.categoria !== cat);
+    saveState();
+}
 
-    titleTrack.innerText = midia.título;
-
-    const url = midia.link.trim();
-    const ytId = extrairIdYouTube(url);
-
-    if (ytId) {
-        // Engine 1: Player de Iframe Oficial do YouTube (permite controle programático futuro)
-        ytIframe.classList.remove("hidden");
-        if (ytPlayerInstance) {
-            ytPlayerInstance.loadVideoById(ytId);
-        } else {
-            ytPlayerInstance = new YT.Player('yt-player', {
-                videoId: ytId,
-                playerVars: { 'autoplay': 1, 'playsinline': 1 }
-            });
-        }
-    } else if (url.match(/\.(mp4|mkv|webm|ogg)$/i)) {
-        // Engine 3: Player Nativo HTML5 para links brutos (.mp4, .mkv, etc)
-        rawPlayer.classList.remove("hidden");
-        rawPlayer.src = url;
-        rawPlayer.play();
-    } else {
-        // Engine 2: Player Universal Embed Tradicional (Archive.org, embeds externos, etc)
-        universalPlayer.classList.remove("hidden");
-        let finalEmbed = url;
-        if (url.includes("archive.org/details/")) {
-            finalEmbed = url.replace("archive.org/details/", "archive.org/embed/");
-        }
-        universalPlayer.src = finalEmbed;
-    }
+function saveState() {
+    // Organiza a lista para salvar no formato Array estruturado compatível com PUT
+    const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
+    const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
     
-    container.scrollIntoView({ behavior: 'smooth' });
-}
-
-function extrairIdYouTube(url) {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-}
-
-// ==========================================
-// CAPTURA AUTOMÁTICA DE DADOS DE VÍDEO
-// ==========================================
-async function capturarDadosPorUrl(url) {
-    const ytId = extrairIdYouTube(url);
-    if (ytId) {
-        try {
-            const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${ytId}&key=${YOUTUBE_API_KEY}`);
-            const data = await res.json();
-            if (data.items && data.items.length > 0) {
-                const snippet = data.items[0].snippet;
-                return {
-                    título: snippet.title,
-                    capa: snippet.thumbnails.medium ? snippet.thumbnails.medium.url : snippet.thumbnails.default.url
-                };
-            }
-        } catch (e) { console.error("Falha ao capturar metadados do YouTube:", e); }
-    }
-    
-    if (url.includes("archive.org/details/")) {
-        const itemID = url.split("/details/")[1].split("/")[0];
-        return {
-            título: itemID.replace(/-/g, " "),
-            capa: `https://archive.org/services/img/${itemID}`
-        };
-    }
-
-    if (url.match(/\.(mp4|mkv|webm|ogg)$/i)) {
-        const nomeArquivo = url.substring(url.lastIndexOf('/') + 1);
-        return {
-            título: decodeURIComponent(nomeArquivo).replace(/\.[^/.]+$/, ""),
-            capa: "https://placehold.co/120x90/111/fff?text=Video+Link"
-        };
-    }
-
-    return { título: "", capa: "" };
-}
-
-// ==========================================
-// SISTEMA DE EDIÇÃO AVANÇADA (MODAL INTERNO)
-// ==========================================
-let midiaEmEdicaoGlobal = null;
-function abrirModalEdicaoAvancada(midia) {
-    midiaEmEdicaoGlobal = midia;
-    document.getElementById("edit-field-title").value = midia.título || "";
-    document.getElementById("edit-field-link").value = midia.link || "";
-    document.getElementById("edit-field-capa").value = midia.capa || "";
-    document.getElementById("edit-field-category").value = midia.categoria || "";
-    document.getElementById("edit-field-subcategory").value = midia.subcategoria || "";
-    document.getElementById("edit-media-modal").classList.remove("hidden");
-}
-
-function fecharModalEdicaoAvancada() {
-    midiaEmEdicaoGlobal = null;
-    document.getElementById("edit-media-modal").classList.add("hidden");
-}
-
-// ==========================================
-// EVENTOS DOS COMPONENTES E MENUS
-// ==========================================
-function configurarEventosInterface() {
-    // Menu Responsivo Lateral
-    const toggleSidebar = document.getElementById("toggle-sidebar");
-    const sidebar = document.getElementById("sidebar");
-    
-    toggleSidebar.addEventListener("click", () => {
-        sidebar.classList.toggle("open");
-        sidebar.classList.toggle("collapsed");
-    });
-
-    // Fechar Reprodutor
-    document.getElementById("btn-close-player").addEventListener("click", () => {
-        document.getElementById("player-container").classList.add("hidden");
-        if(ytPlayerInstance) ytPlayerInstance.stopVideo();
-        document.getElementById("raw-player").pause();
-        document.getElementById("universal-player").src = "";
-    });
-
-    // Breadcrumb Home
-    document.getElementById("bc-root").addEventListener("click", () => {
-        categoriaAtual = ""; subcategoriaAtual = "";
-        atualizarBreadcrumb();
-        exibirMosaicoInicial();
-    });
-
-    // Busca interna em tempo real
-    document.getElementById("search-internal-input").addEventListener("input", (e) => {
-        const termo = e.target.value.toLowerCase();
-        if(!termo) { exibirMosaicoInicial(); return; }
-        const filtradas = bancoMidias.filter(m => 
-            m.título.toLowerCase().includes(termo) || 
-            m.categoria.toLowerCase().includes(termo) || 
-            m.subcategoria.toLowerCase().includes(termo)
-        );
-        renderizarMosaico(filtradas);
-    });
-
-    // Pesquisa Direta no Global do YouTube
-    document.getElementById("search-yt-input").addEventListener("keypress", async (e) => {
-        if (e.key === "Enter") {
-            const query = e.target.value.trim();
-            if (!query) return;
-            
-            categoriaAtual = ""; subcategoriaAtual = "";
-            document.getElementById("bc-category").classList.add("hidden");
-            document.getElementById("bc-subcategory").classList.add("hidden");
-            const bcSearch = document.getElementById("bc-search");
-            bcSearch.classList.remove("hidden");
-            bcSearch.querySelector(".txt").innerText = `"${query}" no YouTube`;
-
-            try {
-                const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=${encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                
-                const resultados = data.items.map(item => ({
-                    título: item.snippet.title,
-                    link: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-                    capa: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
-                    categoria: "Resultados de Busca",
-                    subcategoria: ""
-                }));
-                renderizarMosaico(resultados);
-            } catch (err) { alert("Erro ao pesquisar no YouTube."); }
-        }
-    });
-
-    // Botão Sair (Logout)
-    document.getElementById("btn-logout").addEventListener("click", () => {
-        document.getElementById("app-container").classList.add("hidden");
-        document.getElementById("login-screen").classList.remove("hidden");
-        document.getElementById("login-user").value = "";
-        document.getElementById("login-pass").value = "";
-    });
-
-    // Eventos do Modal Avançado de Edição
-    document.getElementById("btn-cancel-edit-media").addEventListener("click", fecharModalEdicaoAvancada);
-    document.getElementById("btn-submit-edit-media").addEventListener("click", async () => {
-        if (!midiaEmEdicaoGlobal || !midiaEmEdicaoGlobal.idFirebase) return;
-        
-        const payloadAtualizado = {
-            título: document.getElementById("edit-field-title").value.trim(),
-            link: document.getElementById("edit-field-link").value.trim(),
-            capa: document.getElementById("edit-field-capa").value.trim(),
-            categoria: document.getElementById("edit-field-category").value.trim(),
-            subcategoria: document.getElementById("edit-field-subcategory").value.trim()
-        };
-
-        if(!payloadAtualizado.título || !payloadAtualizado.link || !payloadAtualizado.categoria) {
-            return alert("Título, Link e Categoria são obrigatórios.");
-        }
-
-        try {
-            await fetch(`${FIREBASE_URL}/midias/${midiaEmEdicaoGlobal.idFirebase}.json`, {
-                method: "PUT",
-                body: JSON.stringify(payloadAtualizado)
-            });
-            alert("Mídia atualizada com sucesso!");
-            fecharModalEdicaoAvancada();
-            await inicializarSistema();
-            if(categoriaAtual) selecionarCategoria(categoriaAtual);
-        } catch (err) { alert("Erro ao salvar alterações no Firebase."); }
-    });
-}
-
-function configurarEventosAbasAdmin() {
-    const tabs = document.querySelectorAll(".tab-btn");
-    tabs.forEach(tab => {
-        tab.addEventListener("click", () => {
-            tabs.forEach(t => t.classList.remove("active"));
-            tab.classList.add("active");
-            
-            document.querySelectorAll(".tab-content").forEach(content => content.classList.add("hidden"));
-            const target = tab.getAttribute("data-tab");
-            document.getElementById(target).classList.remove("hidden");
-
-            if (target === "manage-tab") renderizarArvoreCrudGerencial();
-        });
-    });
-}
-
-function configurarEventosAdmin() {
-    const adminModal = document.getElementById("admin-modal");
-    document.getElementById("btn-open-admin").addEventListener("click", () => adminModal.classList.remove("hidden"));
-    document.getElementById("btn-close-admin").addEventListener("click", () => adminModal.classList.add("hidden"));
-
-    // Capturar dados manualmente na inserção
-    const manualMediaUrl = document.getElementById("manual-media-url");
-    document.getElementById("btn-fetch-manual").addEventListener("click", async () => {
-        const url = manualMediaUrl.value.trim();
-        if(!url) return alert("Cole uma URL primeiro!");
-        const dados = await capturarDadosPorUrl(url);
-        document.getElementById("prev-title").value = dados.título;
-        document.getElementById("prev-thumb").src = dados.capa || "https://placehold.co/120x90?text=Sem+Capa";
-    });
-
-    // Salvar nova mídia manual
-    document.getElementById("btn-save-media").addEventListener("click", async () => {
-        const url = manualMediaUrl.value.trim();
-        const titulo = document.getElementById("prev-title").value.trim();
-        const capa = document.getElementById("prev-thumb").src;
-        const categoria = document.getElementById("media-category").value.trim();
-        const subcategoria = document.getElementById("media-subcategory").value.trim();
-
-        if(!url || !titulo || !categoria) return alert("Por favor preencha todos os campos obrigatórios (Link, Título e Categoria).");
-
-        const novaMidia = { título, link: url, capa, categoria, subcategoria };
-        await salvarMidiaNoFirebase(novaMidia);
-        
-        alert("Mídia cadastrada com sucesso!");
-        manualMediaUrl.value = "";
-        document.getElementById("prev-title").value = "";
-        document.getElementById("prev-thumb").src = "https://placehold.co/120x90?text=Sem+Capa";
-    });
-
-    // Exportação Completa de Backup JSON
-    document.getElementById("btn-export-json").addEventListener("click", () => {
-        // Remove ids temporários do Firebase para exportação limpa
-        const dadosLimpos = bancoMidias.map(({ idFirebase, ...rest }) => rest);
-        const blob = new Blob([JSON.stringify(dadosLimpos, null, 2)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `backup_streamhub_${new Date().toISOString().slice(0,10)}.json`;
-        a.click();
-    });
-
-    // Processamento de Código JSON colado via caixa de texto
-    document.getElementById("btn-process-code").addEventListener("click", async () => {
-        const campoTexto = document.getElementById("import-json-code");
-        const stringCodigo = campoTexto.value.trim();
-        if (!stringCodigo) return alert("Cole um código JSON válido na caixa primeiro.");
-
-        try {
-            const objetoInjetado = JSON.parse(stringCodigo);
-            const arrayImportar = Array.isArray(objetoInjetado) ? objetoInjetado : [objetoInjetado];
-
-            if (confirm(`Deseja processar e importar ${arrayImportar.length} mídias inseridas em lote via código?`)) {
-                for (const midia of arrayImportar) {
-                    if (midia.título && midia.link && midia.categoria) {
-                        const payload = {
-                            título: midia.título,
-                            link: midia.link,
-                            capa: midia.capa || midia.thumbnail || "https://placehold.co/120x90?text=Import",
-                            categoria: midia.categoria,
-                            subcategoria: midia.subcategoria || ""
-                        };
-                        await fetch(`${FIREBASE_URL}/midias.json`, {
-                            method: "POST",
-                            body: JSON.stringify(payload),
-                            headers: { "Content-Type": "application/json" }
-                        });
+    fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) })
+        .then(() => {
+            // Sincroniza e redesenha visões
+            fetch(CONFIG.FIREBASE_URL)
+                .then(res => res.json())
+                .then(data => {
+                    database = [];
+                    if(data) {
+                        if (Array.isArray(data)) database = data.filter(i => i !== null);
+                        else Object.keys(data).forEach(k => database.push({ idFirebase: k, ...data[k] }));
                     }
-                }
-                alert("Código JSON processado e mídias integradas com sucesso!");
-                campoTexto.value = "";
-                await inicializarSistema();
-            }
-        } catch (e) {
-            alert("Erro de sintaxe no JSON colado. Verifique as aspas e chaves do código.");
-        }
-    });
-
-    // Importação via arquivo físico .json
-    const fileInput = document.getElementById("import-json-file");
-    document.getElementById("btn-trigger-import").addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            try {
-                const lista = JSON.parse(evt.target.result);
-                if (Array.isArray(lista)) {
-                    if(confirm(`Deseja importar em lote ${lista.length} mídias deste arquivo de backup?`)) {
-                        for (const item of lista) {
-                            if(item.título && item.link && item.categoria) {
-                                await fetch(`${FIREBASE_URL}/midias.json`, {
-                                    method: "POST",
-                                    body: JSON.stringify(item),
-                                    headers: { "Content-Type": "application/json" }
-                                });
-                            }
-                        }
-                        alert("Carga em lote importada com sucesso!");
-                        await inicializarSistema();
-                    }
-                } else { alert("O arquivo JSON de backup deve ser uma lista de mídias estruturada."); }
-            } catch(err) { alert("Erro ao decodificar arquivo JSON."); }
-        };
-        reader.readAsText(file);
-    });
-}
-
-function atualizarBreadcrumb() {
-    const bcCat = document.getElementById("bc-category");
-    const bcSub = document.getElementById("bc-subcategory");
-    document.getElementById("bc-search").classList.add("hidden");
-
-    if (categoriaAtual) {
-        bcCat.classList.remove("hidden");
-        bcCat.querySelector(".txt").innerText = categoriaAtual;
-    } else {
-        bcCat.classList.add("hidden");
-    }
-
-    if (subcategoriaAtual) {
-        bcSub.classList.remove("hidden");
-        bcSub.querySelector(".txt").innerText = subcategoriaAtual;
-    } else {
-        bcSub.classList.add("hidden");
-    }
-}
-
-// ==========================================
-// MONITORAMENTO E CRUD GERENCIAL NA ABA 3
-// ==========================================
-function renderizarArvoreCrudGerencial() {
-    const container = document.getElementById("crud-tree-list");
-    container.innerHTML = "";
-
-    // Agrupa hierarquicamente em memória
-    const organizacao = {};
-    bancoMidias.forEach(midia => {
-        if (!organizacao[midia.categoria]) organizacao[midia.categoria] = {};
-        const subKey = midia.subcategoria || "_sem_sub";
-        if (!organizacao[midia.categoria][subKey]) organizacao[midia.categoria][subKey] = [];
-        organizacao[midia.categoria][subKey].push(midia);
-    });
-
-    const catsOrdenadas = Object.keys(organizacao).sort();
-
-    if (catsOrdenadas.length === 0 && Object.keys(canaisDinamicos).length === 0) {
-        container.innerHTML = `<p style="font-size:0.85rem; color:var(--text-muted);">Nenhum dado salvo no Firebase atualmente.</p>`;
-        return;
-    }
-
-    // Renderiza mídias e ramos cadastrados
-    catsOrdenadas.forEach(cat => {
-        const itemCat = document.createElement("div");
-        itemCat.className = "crud-item";
-        itemCat.innerHTML = `<span><i class="fas fa-folder text-red"></i> <b>CATEGORIA: ${cat}</b></span>`;
-        
-        const actionsCat = document.createElement("div");
-        actionsCat.className = "crud-actions";
-        
-        const btnDelCat = document.createElement("button");
-        btnDelCat.className = "crud-btn btn-del";
-        btnDelCat.innerHTML = `<i class="fas fa-trash"></i> Excluir Categoria`;
-        btnDelCat.addEventListener("click", () => deletarBlocoDoFirebase("categoria", cat));
-        
-        actionsCat.appendChild(btnDelCat);
-        itemCat.appendChild(actionsCat);
-        container.appendChild(itemCat);
-
-        // Exibe se há um canal dinâmico mapeado a esta categoria
-        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-        if (canaisDinamicos[nodeName]) {
-            const itemCanalVinculado = document.createElement("div");
-            itemCanalVinculado.className = "crud-item sub-level";
-            itemCanalVinculado.style.borderLeft = "3px solid #8e44ad";
-            itemCanalVinculado.innerHTML = `<span><i class="fas fa-sync text-red"></i> Subcategoria Conectada: <b>Vídeos Recentes (Canal: ${canaisDinamicos[nodeName].title})</b></span>`;
-            
-            const actionChan = document.createElement("div");
-            actionChan.className = "crud-actions";
-            const btnDelChan = document.createElement("button");
-            btnDelChan.className = "crud-btn btn-del";
-            btnDelChan.style.background = "#8e44ad";
-            btnDelChan.innerHTML = `<i class="fas fa-unlink"></i> Desconectar Canal`;
-            btnDelChan.addEventListener("click", () => deletarBlocoDoFirebase("canal_dinamico", nodeName, canaisDinamicos[nodeName].title));
-            
-            actionChan.appendChild(btnDelChan);
-            itemCanalVinculado.appendChild(actionChan);
-            container.appendChild(itemCanalVinculado);
-        }
-
-        // Subcategorias e faixas
-        Object.keys(organizacao[cat]).sort().forEach(sub => {
-            if (sub !== "_sem_sub") {
-                const itemSub = document.createElement("div");
-                itemSub.className = "crud-item sub-level";
-                itemSub.innerHTML = `<span><i class="fas fa-folder-open" style="color:var(--accent);"></i> Subcategoria: ${sub}</span>`;
-                
-                const actionsSub = document.createElement("div");
-                actionsSub.className = "crud-actions";
-                
-                const btnDelSub = document.createElement("button");
-                btnDelSub.className = "crud-btn btn-del";
-                btnDelSub.innerHTML = `<i class="fas fa-folder-minus"></i> Limpar Sub`;
-                btnDelSub.addEventListener("click", () => deletarBlocoDoFirebase("subcategoria", { cat, sub }));
-                
-                actionsSub.appendChild(btnDelSub);
-                itemSub.appendChild(actionsSub);
-                container.appendChild(itemSub);
-            }
-
-            organizacao[cat][sub].forEach(midia => {
-                const itemTrack = document.createElement("div");
-                itemTrack.className = "crud-item track-level";
-                itemTrack.innerHTML = `<span><i class="fab fa-youtube text-muted"></i> ${midia.título}</span>`;
-                
-                const actionsTrack = document.createElement("div");
-                actionsTrack.className = "crud-actions";
-                
-                const btnEditT = document.createElement("button");
-                btnEditT.className = "crud-btn btn-edit";
-                btnEditT.innerHTML = `<i class="fas fa-edit"></i>`;
-                btnEditT.addEventListener("click", () => abrirModalEdicaoAvancada(midia));
-
-                const btnDelT = document.createElement("button");
-                btnDelT.className = "crud-btn btn-del";
-                btnDelT.innerHTML = `<i class="fas fa-times"></i>`;
-                btnDelT.addEventListener("click", () => deletarBlocoDoFirebase("midia_unica", midia.idFirebase));
-                
-                actionsTrack.appendChild(btnEditT);
-                actionsTrack.appendChild(btnDelT);
-                itemTrack.appendChild(actionsTrack);
-                container.appendChild(itemTrack);
-            });
+                    renderSidebar(); renderMosaic(); renderCrudManager();
+                });
         });
-    });
-
-    // Exibe canais dinâmicos órfãos (que estão cadastrados mas a categoria estática ainda não tem vídeos manuais salvos no Firebase)
-    Object.keys(canaisDinamicos).forEach(encodedKey => {
-        try {
-            const catNome = decodeURIComponent(escape(atob(encodedKey)));
-            if (!organizacao[catNome]) {
-                const itemOrfao = document.createElement("div");
-                itemOrfao.className = "crud-item";
-                itemOrfao.innerHTML = `<span><i class="fas fa-folder text-red"></i> <b>CATEGORIA (DINÂMICA): ${catNome}</b></span>`;
-                container.appendChild(itemOrfao);
-
-                const itemChan = document.createElement("div");
-                itemChan.className = "crud-item sub-level";
-                itemChan.style.borderLeft = "3px solid #8e44ad";
-                itemChan.innerHTML = `<span><i class="fas fa-sync text-red"></i> Subcategoria Conectada: <b>Vídeos Recentes (Canal: ${canaisDinamicos[encodedKey].title})</b></span>`;
-                
-                const actionChan = document.createElement("div");
-                actionChan.className = "crud-actions";
-                const btnDelChan = document.createElement("button");
-                btnDelChan.className = "crud-btn btn-del";
-                btnDelChan.style.background = "#8e44ad";
-                btnDelChan.innerHTML = `<i class="fas fa-unlink"></i> Desconectar Canal`;
-                btnDelChan.addEventListener("click", () => deletarBlocoDoFirebase("canal_dinamico", encodedKey, canaisDinamicos[encodedKey].title));
-                
-                actionChan.appendChild(btnDelChan);
-                itemChan.appendChild(actionChan);
-                container.appendChild(itemChan);
-            }
-        } catch(e){}
-    });
 }
 
-async function deletarBlocoDoFirebase(tipo, payload, detalheAdicional = "") {
-    let confirmacao = false;
-    let targetsParaApagar = [];
-
-    if (tipo === "midia_unica") {
-        if (confirm("Tem certeza de que deseja remover esta mídia específica do Firebase?")) {
-            targetsParaApagar.push(`${FIREBASE_URL}/midias/${payload}.json`);
-        }
-    } 
-    else if (tipo === "canal_dinamico") {
-        if (confirm(`Deseja desconectar a sincronização automática do canal "${detalheAdicional}" desta categoria?`)) {
-            targetsParaApagar.push(`${FIREBASE_URL}/canais_dinamicos/${payload}.json`);
-        }
-    }
-    else if (tipo === "subcategoria") {
-        if (confirm(`Deseja deletar TODAS as mídias salvas sob a subcategoria "${payload.sub}?"`)) {
-            bancoMidias.forEach(m => {
-                if (m.categoria === payload.cat && m.subcategoria === payload.sub) {
-                    targetsParaApagar.push(`${FIREBASE_URL}/midias/${m.idFirebase}.json`);
-                }
-            });
-        }
-    } 
-    else if (tipo === "categoria") {
-        if (confirm(`ATENÇÃO: Deseja apagar a Categoria completa "${payload}" (Isso removerá todas as mídias físicas dela e desconectará canais dinâmicos acoplados)?`)) {
-            // Varre mídias estáticas
-            bancoMidias.forEach(m => {
-                if (m.categoria === payload) {
-                    targetsParaApagar.push(`${FIREBASE_URL}/midias/${m.idFirebase}.json`);
-                }
-            });
-            // Varre canais dinâmicos associados
-            const nodeName = btoa(unescape(encodeURIComponent(payload))).replace(/=/g, "");
-            if (canaisDinamicos[nodeName]) {
-                targetsParaApagar.push(`${FIREBASE_URL}/canais_dinamicos/${nodeName}.json`);
-            }
-        }
-    }
-
-    if (targetsParaApagar.length > 0) {
-        try {
-            // Executa as deleções sequencialmente de forma limpa no endpoint
-            for (const url of targetsParaApagar) {
-                await fetch(url, { method: "DELETE" });
-            }
-            alert("Operação de remoção concluída com sucesso!");
-            
-            // Força reset de visões
-            categoriaAtual = ""; subcategoriaAtual = "";
-            atualizarBreadcrumb();
-            
-            await inicializarSistema();
-            renderujaAbasEstaticasNaInterfaceAtiva();
-        } catch (e) {
-            alert("Ocorreu um erro ao processar a exclusão.");
-        }
-    }
+function downloadJSON(obj, filename) {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    a.setAttribute("download", `${filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_backup.json`);
+    document.body.appendChild(a); a.click(); a.remove();
 }
 
-function renderujaAbasEstaticasNaInterfaceAtiva() {
-    const painelManage = document.getElementById("manage-tab");
-    if (painelManage && !painelManage.classList.contains("hidden")) {
-        renderizarArvoreCrudGerencial();
-    }
+function handleToggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('open');
+    sidebar.classList.toggle('collapsed');
 }
+
+function switchTabs(targetTabId, activeTriggerBtnId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById(activeTriggerBtnId).classList.add('active');
+    document.getElementById(targetTabId).classList.remove('hidden');
+}
+
+// ==========================================
+// 9. CONFIGURAÇÃO DOS GATILHOS DA INTERFACE
+// ==========================================
+function setupEventListeners() {
+    document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
+    document.getElementById('search-internal-input').oninput = (e) => filterInternalDatabase(e.target.value);
+    document.getElementById('toggle-sidebar').onpointerdown = (e) => { e.preventDefault(); handleToggleSidebar(); };
+    document.getElementById('bc-root').onclick = () => { currentView = 'categories'; renderMosaic(); };
+
+    document.getElementById('btn-open-admin').onpointerdown = (e) => {
+        e.preventDefault(); document.getElementById('admin-modal').classList.remove('hidden');
+        switchTabs('add-tab', 'tab-trigger-add'); renderCrudManager(); 
+    };
+    document.getElementById('btn-close-admin').onpointerdown = (e) => { e.preventDefault(); document.getElementById('admin-modal').classList.add('hidden'); };
+    
+    document.getElementById('tab-trigger-manage').onpointerdown = (e) => { e.preventDefault(); switchTabs('manage-tab', 'tab-trigger-manage'); renderCrudManager(); };
+    document.getElementById('tab-trigger-add').onpointerdown = (e) => { e.preventDefault(); switchTabs('add-tab', 'tab-trigger-add'); };
+    document.getElementById('tab-trigger-channel').onpointerdown = (e) => { e.preventDefault(); switchTabs('channel-tab', 'tab-trigger-channel'); };
+
+    document.getElementById('btn-submit-edit-media').onpointerdown = (e) => saveAdvancedEditChanges(e);
+    document.getElementById('btn-cancel-edit-media').onpointerdown = (e) => { e.preventDefault(); document.getElementById('edit-media-modal').classList.add('hidden'); };
+
+    document.getElementById('btn-close-player').onpointerdown = (e) => {
+        e.preventDefault();
+        if(ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(err){} }
+        document.getElementById('universal-player').src = "";
+        const rp = document.getElementById('raw-player'); rp.pause(); rp.src = "";
+        document.getElementById('player-container').classList.add('hidden');
+    };
+
+    configurarEventosBuscaCanal();
+}
+
+// Inicialização de Sessão
+window.onload = () => {
+    configurarEventosLogin();
+    checkSession();
+};
