@@ -35,13 +35,14 @@ body {
 }
 .modal-content.admin-box { max-width: 750px; max-height: 85vh; overflow-y: auto; }
 
-/* Alinhamento da Logo */
-        .login-logo {
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-            margin-bottom: 20px; /* Espaço entre a logo e a caixa */
-        }
+/* ESTILIZAÇÃO DA LOGOTIPO DE 128x128 NO LOGIN */
+.login-logo {
+    width: 128px;
+    height: 128px;
+    object-fit: contain;
+    margin: 0 auto 1rem auto;
+    display: block;
+}
 
 /* Header e Container de Ações */
 .main-header {
@@ -103,7 +104,7 @@ body {
 }
 .add-music-badge:hover { background: var(--accent-hover); transform: scale(1.05); }
 
-/* ÍCONE DE EDIÇÃO RÁPIDA NO CANTO DO CARD */
+/* Ícone de Edição Rápida */
 .quick-edit-badge {
     position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.6); color: var(--text-muted);
     border: 1px solid #333; width: 28px; height: 28px; border-radius: 50%; display: flex; justify-content: center;
@@ -123,7 +124,7 @@ body {
 .btn-secondary { background: #282828; color: #fff; border: 1px solid var(--border); }
 .btn-secondary:hover { background: #383838; border-color: var(--accent); }
 
-/* ÁRVORE CRUD GERENCIAL E SUAS EXPANSOES SANFONA */
+/* Árvore CRUD Gerencial */
 .crud-list { text-align: left; margin-top: 1.5rem; background: #111; padding: 1rem; border-radius: 6px; }
 .crud-item { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.5rem; border-bottom: 1px solid #222; gap: 1rem; cursor: pointer; }
 .crud-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
@@ -160,7 +161,6 @@ button:hover { background: var(--accent-hover); }
 .breadcrumb { font-size: 0.9rem; color: var(--text-muted); }
 .clickable { cursor: pointer; color: var(--text-main); }
 
-/* Novas classes para os botões extras da busca da API */
 .search-btn-group { display: flex; gap: 4px; margin-top: 5px; width: 100%; }
 .search-btn-group button { padding: 4px 8px; margin: 0; font-size: 0.75rem; border-radius: 3px; font-weight: normal; }
 
