@@ -35,6 +35,14 @@ body {
 }
 .modal-content.admin-box { max-width: 750px; max-height: 85vh; overflow-y: auto; }
 
+/* Alinhamento da Logo */
+        .login-logo {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            margin-bottom: 20px; /* Espaço entre a logo e a caixa */
+        }
+
 /* Header e Container de Ações */
 .main-header {
     height: 60px; background: var(--bg-sidebar);
