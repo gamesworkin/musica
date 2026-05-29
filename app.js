@@ -2,10 +2,10 @@
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
 const CONFIG = {
-    ADMIN_USER: "diegosilvaeo",       
-    ADMIN_PASSWORD: "arcnet2154",     
-    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
-    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/musicas.json" 
+    ADMIN_USER: "admin",       
+    ADMIN_PASSWORD: "123",     
+    YT_API_KEY: "SUA_YOUTUBE_API_KEY_V3",
+    FIREBASE_URL: "https://SEU-PROJETO.firebaseio.com/musicas.json" 
 };
 
 // Estado Global da Aplicação
@@ -25,7 +25,7 @@ let expandedCrudCats = {};
 let expandedCrudSubs = {};
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO E SUPORTE A ENTER
+// 1. AUTENTICAÇÃO COM SESSÃO E ENTER
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
@@ -79,18 +79,16 @@ function handleLogoutActions() {
 }
 
 // ==========================================
-// 2. INICIALIZAÇÃO E CARGA DO FIREBASE (CORRIGIDO)
+// 2. INICIALIZAÇÃO E CARGA DO FIREBASE
 // ==========================================
 async function initApp() {
     await carregarCanaisDinamicos();
     
-    // Conexão e tratamento do nó principal de mídias
     try {
         const res = await fetch(CONFIG.FIREBASE_URL);
         const data = await res.json();
         database = [];
         if (data) {
-            // Mapeia o objeto linear tratando arrays e objetos sem quebrar chaves acentuadas
             if (Array.isArray(data)) {
                 database = data.filter(item => item !== null);
             } else {
@@ -100,24 +98,55 @@ async function initApp() {
             }
         }
     } catch (e) {
-        console.log("Erro ao carregar mídias, usando array local.", e);
+        console.log("Erro ao carregar mídias.", e);
     } finally {
         renderSidebar();
         renderMosaic();
         setupEventListeners();
+        alimentarSeletorCategoriasCanais(); // Alimenta o novo dropdown automaticamente
     }
 }
 
 async function carregarCanaisDinamicos() {
     try {
-        // Encurta a URL base do Firebase para localizar o nó de canais
         const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
         const res = await fetch(`${baseUrl}/canais_dinamicos.json`);
         const data = await res.json();
         canaisDinamicos = data || {};
     } catch (e) {
-        console.error("Erro ao carregar canais dinâmicos:", e);
+        console.error(error);
     }
+}
+
+// AUTOMATIZAÇÃO: Cria e renderiza as categorias existentes direto no select
+function alimentarSeletorCategoriasCanais() {
+    const select = document.getElementById("channel-target-category");
+    select.innerHTML = "";
+
+    // Pega as categorias existentes no banco de dados
+    const categories = [...new Set(database.map(item => item.categoria))];
+    
+    // Pega as categorias existentes nos canais dinâmicos
+    Object.keys(canaisDinamicos).forEach(key => {
+        try {
+            const catNome = decodeURIComponent(escape(atob(key)));
+            if(!categories.includes(catNome)) categories.push(catNome);
+        } catch(e){}
+    });
+
+    categories.sort();
+
+    if(categories.length === 0) {
+        select.innerHTML = `<option value="">Nenhuma categoria encontrada. Crie mídias primeiro.</option>`;
+        return;
+    }
+
+    categories.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.innerText = cat;
+        select.appendChild(opt);
+    });
 }
 
 // ==========================================
@@ -133,10 +162,20 @@ function renderMosaic() {
 
     if (currentView === 'categories') {
         const categories = [...new Set(database.map(item => item.categoria))];
-        categories.forEach(cat => {
+        Object.keys(canaisDinamicos).forEach(key => {
+            try {
+                const c = decodeURIComponent(escape(atob(key)));
+                if(!categories.includes(c)) categories.push(c);
+            } catch(e){}
+        });
+
+        categories.sort().forEach(cat => {
             if(!cat) return;
             const match = database.find(item => item.categoria === cat);
-            grid.appendChild(createCard(cat, match ? match.capa : '', false, false, () => {
+            const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
+            const thumbCapa = match ? match.capa : (canaisDinamicos[nodeName] ? canaisDinamicos[nodeName].thumb : '');
+            
+            grid.appendChild(createCard(cat, thumbCapa, false, false, () => {
                 selectedCategory = cat;
                 currentView = 'subcategories';
                 renderMosaic();
@@ -149,13 +188,12 @@ function renderMosaic() {
 
         const subcategories = [...new Set(database.filter(item => item.categoria === selectedCategory).map(item => item.subcategoria))];
         
-        // Verifica se há canal associado a esta categoria para injetar subcategoria virtual
         const nodeName = btoa(unescape(encodeURIComponent(selectedCategory))).replace(/=/g, "");
         if (canaisDinamicos[nodeName] && !subcategories.includes("Vídeos Recentes")) {
             subcategories.push("Vídeos Recentes");
         }
 
-        subcategories.forEach(sub => {
+        subcategories.sort().forEach(sub => {
             const match = database.find(item => item.categoria === selectedCategory && item.subcategoria === sub);
             grid.appendChild(createCard(sub, match ? match.capa : (canaisDinamicos[nodeName] ? canaisDinamicos[nodeName].thumb : ''), false, false, () => {
                 selectedSubcategory = sub;
@@ -316,8 +354,8 @@ function configurarEventosBuscaCanal() {
 
     document.getElementById("btn-save-channel-link").onpointerdown = async (e) => {
         e.preventDefault();
-        const catDestino = document.getElementById("channel-target-category").value.trim();
-        if(!canalSelecionadoProvisorio || !catDestino) return alert("Preencha todos os dados.");
+        const catDestino = document.getElementById("channel-target-category").value;
+        if(!canalSelecionadoProvisorio || !catDestino) return alert("Preencha todos os dados e selecione a categoria.");
 
         try {
             const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
@@ -338,7 +376,6 @@ function configurarEventosBuscaCanal() {
             alert("Canal vinculado com sucesso!");
             document.getElementById("channel-preview").style.display = "none";
             document.getElementById("search-channel-input").value = "";
-            document.getElementById("channel-target-category").value = "";
             canalSelecionadoProvisorio = null;
             initApp();
         } catch(err) { alert("Erro ao salvar canal."); }
@@ -353,8 +390,6 @@ function renderSidebar() {
     tree.innerHTML = '';
 
     const categories = [...new Set(database.map(item => item.categoria))];
-    
-    // Injeta categorias órfãs vindas dos canais dinâmicos
     Object.keys(canaisDinamicos).forEach(key => {
         try {
             const catNome = decodeURIComponent(escape(atob(key)));
@@ -607,7 +642,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. PERSISTÊNCIA E OPERAÇÕES CRUD NO FIREBASE
+// 8. PERSISTÊNCIA E OPERAÇÕES CRUD no FIREBASE
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index;
@@ -678,13 +713,11 @@ async function deletarCategoriaCompleta(cat) {
 }
 
 function saveState() {
-    // Organiza a lista para salvar no formato Array estruturado compatível com PUT
     const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
     const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
     
     fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) })
         .then(() => {
-            // Sincroniza e redesenha visões
             fetch(CONFIG.FIREBASE_URL)
                 .then(res => res.json())
                 .then(data => {
@@ -693,7 +726,7 @@ function saveState() {
                         if (Array.isArray(data)) database = data.filter(i => i !== null);
                         else Object.keys(data).forEach(k => database.push({ idFirebase: k, ...data[k] }));
                     }
-                    renderSidebar(); renderMosaic(); renderCrudManager();
+                    renderSidebar(); renderMosaic(); renderCrudManager(); alimentarSeletorCategoriasCanais();
                 });
         });
 }
@@ -706,10 +739,19 @@ function downloadJSON(obj, filename) {
     document.body.appendChild(a); a.click(); a.remove();
 }
 
+// SINCRONIA DO MENU HAMBÚRGUER UNIFICADO (FIXED PARA DESKTOP E MOBILE)
 function handleToggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('open');
-    sidebar.classList.toggle('collapsed');
+    
+    if (window.innerWidth <= 768) {
+        // Modo Mobile: Chaveia a classe .open controlando o translateX
+        sidebar.classList.toggle('open');
+        sidebar.classList.remove('collapsed');
+    } else {
+        // Modo Desktop: Chaveia a classe .collapsed controlando a largura (width)
+        sidebar.classList.toggle('collapsed');
+        sidebar.classList.remove('open');
+    }
 }
 
 function switchTabs(targetTabId, activeTriggerBtnId) {
@@ -725,23 +767,25 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 function setupEventListeners() {
     document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
     document.getElementById('search-internal-input').oninput = (e) => filterInternalDatabase(e.target.value);
-    document.getElementById('toggle-sidebar').onpointerdown = (e) => { e.preventDefault(); handleToggleSidebar(); };
+    
+    // Alinhado listener em click para evitar conflitos de touch/pointer em celulares
+    document.getElementById('toggle-sidebar').onclick = (e) => { e.preventDefault(); handleToggleSidebar(); };
     document.getElementById('bc-root').onclick = () => { currentView = 'categories'; renderMosaic(); };
 
-    document.getElementById('btn-open-admin').onpointerdown = (e) => {
+    document.getElementById('btn-open-admin').onclick = (e) => {
         e.preventDefault(); document.getElementById('admin-modal').classList.remove('hidden');
         switchTabs('add-tab', 'tab-trigger-add'); renderCrudManager(); 
     };
-    document.getElementById('btn-close-admin').onpointerdown = (e) => { e.preventDefault(); document.getElementById('admin-modal').classList.add('hidden'); };
+    document.getElementById('btn-close-admin').onclick = (e) => { e.preventDefault(); document.getElementById('admin-modal').classList.add('hidden'); };
     
-    document.getElementById('tab-trigger-manage').onpointerdown = (e) => { e.preventDefault(); switchTabs('manage-tab', 'tab-trigger-manage'); renderCrudManager(); };
-    document.getElementById('tab-trigger-add').onpointerdown = (e) => { e.preventDefault(); switchTabs('add-tab', 'tab-trigger-add'); };
-    document.getElementById('tab-trigger-channel').onpointerdown = (e) => { e.preventDefault(); switchTabs('channel-tab', 'tab-trigger-channel'); };
+    document.getElementById('tab-trigger-manage').onclick = (e) => { e.preventDefault(); switchTabs('manage-tab', 'tab-trigger-manage'); renderCrudManager(); };
+    document.getElementById('tab-trigger-add').onclick = (e) => { e.preventDefault(); switchTabs('add-tab', 'tab-trigger-add'); };
+    document.getElementById('tab-trigger-channel').onclick = (e) => { e.preventDefault(); switchTabs('channel-tab', 'tab-trigger-channel'); };
 
-    document.getElementById('btn-submit-edit-media').onpointerdown = (e) => saveAdvancedEditChanges(e);
-    document.getElementById('btn-cancel-edit-media').onpointerdown = (e) => { e.preventDefault(); document.getElementById('edit-media-modal').classList.add('hidden'); };
+    document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
+    document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); document.getElementById('edit-media-modal').classList.add('hidden'); };
 
-    document.getElementById('btn-close-player').onpointerdown = (e) => {
+    document.getElementById('btn-close-player').onclick = (e) => {
         e.preventDefault();
         if(ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(err){} }
         document.getElementById('universal-player').src = "";
