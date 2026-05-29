@@ -2,10 +2,10 @@
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
 const CONFIG = {
-    ADMIN_USER: "admin",       
-    ADMIN_PASSWORD: "123",     
-    YT_API_KEY: "SUA_YOUTUBE_API_KEY_V3",
-    FIREBASE_URL: "https://SEU-PROJETO.firebaseio.com/musicas.json" 
+    ADMIN_USER: "diegosilvaeo",       
+    ADMIN_PASSWORD: "arcnet2154",     
+    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
+    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/musicas.json" 
 };
 
 // Estado Global da Aplicação
