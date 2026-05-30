@@ -2,8 +2,8 @@
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
 const CONFIG = {
-    ADMIN_USER: "diegosilvaeo",       
-    ADMIN_PASSWORD: "arcnet2154",     
+    ADMIN_USER: "admin",       
+    ADMIN_PASSWORD: "123",     
     YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
     FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/midias.json" 
 };
@@ -250,7 +250,7 @@ function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, cl
 }
 
 // ==========================================
-// 4. API DE CANAIS
+// 4. API DE CANAIS DINÂMICOS
 // ==========================================
 async function buscarVideosRecentesDoCanal(playlistId) {
     const grid = document.getElementById('mosaic-grid');
@@ -307,7 +307,7 @@ function configurarEventosBuscaCanal() {
 }
 
 // ==========================================
-// 5. INTERFACE E SIDEBAR
+// 5. INTERFACE DA SIDEBAR E FILTROS
 // ==========================================
 function renderSidebar() {
     const tree = document.getElementById('sidebar-tree'); if (!tree) return; tree.innerHTML = '';
@@ -380,7 +380,7 @@ function openAdminWithTrack(item) {
 }
 
 // ==========================================
-// 6. REPRODUÇÃO TRIPLA INTERNA
+// 6. REPRODUÇÃO TRIPLA DO PLAYER
 // ==========================================
 function playTrack(index) {
     if(currentPlaylist.length === 0) return; currentTrackIndex = index; const track = currentPlaylist[index];
@@ -416,7 +416,7 @@ function extractYoutubeId(url) {
 }
 
 // ==========================================
-// 7. ÁRVORE GERENCIAL (CRUD)
+// 7. ÁRVORE GERENCIAL SANFONA (CRUD)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list'); if (!listContainer) return; listContainer.innerHTML = '';
@@ -465,15 +465,13 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
     return row;
 }
 
-// =========================================================
-// 8. PERSISTÊNCIA, EXPORTAÇÃO E IMPORTAÇÃO DEFINITIVA (SINCER)
-// =========================================================
+// ==========================================
+// 8. CORREÇÃO E PERSISTÊNCIA DAS FERRAMENTAS JSON
+// ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
-    document.getElementById('edit-field-title').value = item.título || ""; 
-    document.getElementById('edit-field-link').value = item.link || "";
-    document.getElementById('edit-field-capa').value = item.capa || ""; 
-    document.getElementById('edit-field-category').value = item.categoria || "";
+    document.getElementById('edit-field-title').value = item.título || ""; document.getElementById('edit-field-link').value = item.link || "";
+    document.getElementById('edit-field-capa').value = item.capa || ""; document.getElementById('edit-field-category').value = item.categoria || "";
     document.getElementById('edit-field-subcategory').value = item.subcategoria || "";
     if (document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.remove('hidden');
 }
@@ -503,8 +501,7 @@ async function saveAdvancedEditChanges(e) {
             headers: { 'Content-Type': 'application/json; charset=UTF-8' } 
         });
         if (!resposta.ok) throw new Error(`Erro HTTP: ${resposta.status}`);
-        alert("Alterações gravadas!"); 
-        document.getElementById('edit-media-modal').classList.add('hidden');
+        alert("Alterações gravadas!"); document.getElementById('edit-media-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
         await recarregarDadosDoBanco(); renderCrudManager();
     } catch (err) { alert("Erro de gravação global: " + err.message); }
@@ -512,47 +509,46 @@ async function saveAdvancedEditChanges(e) {
 
 async function saveMediaToDatabase(e) {
     if(e) e.preventDefault();
-    const url = document.getElementById('manual-media-url').value.trim(); 
-    const título = document.getElementById('prev-title').value.trim();
-    const capa = document.getElementById('prev-thumb').src; 
-    const categoria = document.getElementById('media-category').value.trim();
+    const url = document.getElementById('manual-media-url').value.trim(); const título = document.getElementById('prev-title').value.trim();
+    const capa = document.getElementById('prev-thumb').src; const categoria = document.getElementById('media-category').value.trim();
     const subcategoria = document.getElementById('media-subcategory').value.trim();
     if(!url || !título || !categoria) return alert("Preencha os campos!");
 
     try {
         await fetch(CONFIG.FIREBASE_URL, { method: 'POST', body: JSON.stringify({ título, link: url, capa, categoria, subcategoria }), headers: { 'Content-Type': 'application/json' } });
-        alert("Salvo com sucesso!"); 
-        document.getElementById('manual-media-url').value = "";
+        alert("Salvo com sucesso!"); document.getElementById('manual-media-url').value = "";
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco();
     } catch (err) { alert("Erro ao salvar."); }
 }
 
-// Executa a importação forçada sobrescrevendo o diretório ativo do Firebase
-async function processarImportacaoTexto(conteudoTexto) {
-    if (!conteudoTexto || !conteudoTexto.trim()) return alert("O conteúdo JSON está vazio.");
+// IMPORTAÇÃO EXCLUSIVA VIA CAIXA DE TEXTO / CAMPO DE TEXTO JSON
+async function importarCodigoJSON() {
+    const campoTexto = document.getElementById('json-input-field');
+    if (!campoTexto || !campoTexto.value.trim()) return alert("Por favor, cole o código JSON antes de prosseguir.");
+    
     try {
-        let parsed = JSON.parse(conteudoTexto.trim());
+        let parsed = JSON.parse(campoTexto.value.trim());
         let loteValidado = [];
         if (Array.isArray(parsed)) loteValidado = parsed;
         else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
 
-        if (loteValidado.length === 0) throw new Error("JSON sem registros válidos.");
+        if (loteValidado.length === 0) throw new Error("A estrutura não possui mídias válidas.");
         const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
 
-        if (confirm(`Atenção: Deseja importar e SOBRESCREVER o seu Firebase com estes ${loteLimpo.length} itens?`)) {
+        if (confirm(`Aviso: Deseja importar e SOBRESCREVER o seu Firebase com estas ${loteLimpo.length} mídias?`)) {
             let res = await fetch(CONFIG.FIREBASE_URL, {
                 method: "PUT",
                 body: JSON.stringify(loteLimpo),
                 headers: { 'Content-Type': 'application/json; charset=UTF-8' }
             });
-            if (!res.ok) throw new Error("Erro de resposta do Firebase.");
-            alert("Mídias importadas e salvas com sucesso no Firebase!");
+            if (!res.ok) throw new Error("Erro de comunicação.");
+            alert("Código JSON injetado e salvo com sucesso!");
+            campoTexto.value = "";
             currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
-            await recarregarDadosDoBanco();
-            renderCrudManager();
+            await recarregarDadosDoBanco(); renderCrudManager();
         }
-    } catch (err) { alert("Erro ao validar dados JSON: " + err.message); }
+    } catch (err) { alert("O código colado é inválido. Verifique colchetes ou aspas. Detalhes: " + err.message); }
 }
 
 async function renomearCategoriaCompleta(antiga, nova) {
@@ -624,19 +620,20 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
     if (triggerBtn) triggerBtn.classList.add('active'); if (targetTab) targetTab.classList.remove('hidden');
 }
 
-// =========================================================
-// 9. EVENT LISTENERS E RASTREADOR DE CLIQUES DE BACKUP (BLINDADO)
-// =========================================================
+// ==========================================
+// 9. MAPA DE VÍNCULOS DE EVENTOS (FIXADOS)
+// ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
     if (document.getElementById('search-internal-input')) document.getElementById('search-internal-input').oninput = (e) => filterInternalDatabase(e.target.value);
     if (document.getElementById('toggle-sidebar')) document.getElementById('toggle-sidebar').onclick = (e) => { e.preventDefault(); handleToggleSidebar(); };
     if (document.getElementById('bc-root')) document.getElementById('bc-root').onclick = () => { currentView = 'categories'; renderMosaic(); };
 
-    if (document.getElementById('btn-fetch-manual')) {
-        document.getElementById('btn-fetch-manual').onclick = async (e) => {
+    const btnFetchManual = document.getElementById('btn-fetch-manual');
+    if (btnFetchManual) {
+        btnFetchManual.onclick = async (e) => {
             e.preventDefault(); const url = document.getElementById('manual-media-url').value.trim(); if(!url) return alert("Insira uma URL.");
-            document.getElementById('btn-fetch-manual').innerText = "Buscando..."; const vId = extractYoutubeId(url);
+            btnFetchManual.innerText = "Buscando..."; const vId = extractYoutubeId(url);
             try {
                 if (vId) {
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${vId}&key=${CONFIG.YT_API_KEY}`);
@@ -669,6 +666,58 @@ function setupEventListeners() {
     if (document.getElementById('btn-submit-edit-media')) document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
+    // FIX EXPORTAR: Ativa o clique com o ID fixado do HTML
+    if (document.getElementById('btn-export-all-json')) {
+        document.getElementById('btn-export-all-json').onclick = (e) => {
+            e.preventDefault();
+            if (database.length === 0) return alert("Não há registos no banco de dados.");
+            downloadJSON(database, "backup_completo_streamhub");
+        };
+    }
+
+    // FIX IMPORTAR TEXTO: Ativa o clique do botão injetor do código
+    if (document.getElementById('btn-submit-json-code')) {
+        document.getElementById('btn-submit-json-code').onclick = (e) => {
+            e.preventDefault();
+            importarCodigoJSON();
+        };
+    }
+
+    // FIX IMPORTAR FICHEIRO: Escuta a seleção do arquivo .json e processa o upload
+    const fileImport = document.getElementById('file-import-json');
+    if (fileImport) {
+        fileImport.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    let parsed = JSON.parse(evt.target.result);
+                    let loteValidado = [];
+                    if (Array.isArray(parsed)) loteValidado = parsed;
+                    else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
+
+                    if (loteValidado.length === 0) throw new Error("Ficheiro inválido.");
+                    const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
+
+                    if (confirm(`Deseja carregar estas ${loteLimpo.length} mídias? O painel atual será substituído.`)) {
+                        let res = await fetch(CONFIG.FIREBASE_URL, {
+                            method: "PUT",
+                            body: JSON.stringify(loteLimpo),
+                            headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+                        });
+                        if (!res.ok) throw new Error("Erro Firebase.");
+                        alert("Ficheiro de backup carregado e salvo com sucesso!");
+                        fileImport.value = "";
+                        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
+                        await recarregarDadosDoBanco(); renderCrudManager();
+                    }
+                } catch(err) { alert("Erro ao validar o ficheiro .json enviado: " + err.message); }
+            };
+            reader.readAsText(file);
+        };
+    }
+
     if (document.getElementById('btn-close-player')) {
         document.getElementById('btn-close-player').onclick = (e) => {
             e.preventDefault(); if(ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(err){} }
@@ -680,71 +729,6 @@ function setupEventListeners() {
 
     if (document.getElementById('btn-logout')) document.getElementById('btn-logout').onclick = (e) => { e.preventDefault(); handleLogoutActions(); };
     configurarEventosBuscaCanal();
-
-    // =========================================================================
-    // DETECTOR DE INTERCEPTAÇÃO GLOBAL (Garante o funcionamento independente do ID)
-    // =========================================================================
-    document.addEventListener('click', async function(event) {
-        let elemento = event.target;
-        
-        // Se clicou dentro de uma tag i ou span interna do botão, sobe para o elemento pai
-        if(elemento.tagName === 'I' || elemento.tagName === 'SPAN') {
-            elemento = elemento.parentElement;
-        }
-
-        let textoBotao = (elemento.innerText || "").toLowerCase();
-        let idBotao = (elemento.id || "").toLowerCase();
-        let classesBotao = (elemento.className || "").toLowerCase();
-
-        // A. INTERCEPTADOR DE EXPORTAÇÃO
-        if(idBotao.includes('export') || textoBotao.includes('exportar') || classesBotao.includes('export')) {
-            if(idBotao.includes('all') || idBotao.includes('tudo') || textoBotao.includes('tudo') || textoBotao.includes('completo')) {
-                event.preventDefault(); event.stopPropagation();
-                if (database.length === 0) return alert("Não há registros para exportar.");
-                downloadJSON(database, "backup_streamhub_completo");
-            }
-        }
-
-        // B. INTERCEPTADOR DE IMPORTAÇÃO VIA CÓDIGO (CAMPO DE TEXTO)
-        if(idBotao.includes('submit') || idBotao.includes('import') || textoBotao.includes('importar') || textoBotao.includes('enviar') || textoBotao.includes('salvar')) {
-            if(textoBotao.includes('código') || textoBotao.includes('texto') || idBotao.includes('code') || idBotao.includes('text')) {
-                event.preventDefault(); event.stopPropagation();
-                
-                // Procura na tela qualquer campo de texto ou textarea
-                let caixasTexto = document.querySelectorAll('textarea, input[type="text"]');
-                let conteudoLocalizado = "";
-                let campoAlvoElemento = null;
-
-                for(let caixa of caixasTexto) {
-                    let val = caixa.value.trim();
-                    if(val.startsWith('[') || val.startsWith('{')) { conteudoLocalizado = val; campoAlvoElemento = caixa; break; }
-                }
-
-                if(!conteudoLocalizado) {
-                    return alert("Código JSON não localizado. Certifique-se de colar o texto que começa com '[' ou '{' em alguma caixa da tela.");
-                }
-
-                await processarImportacaoTexto(conteudoLocalizado);
-                if(campoAlvoElemento) campoAlvoElemento.value = "";
-            }
-        }
-    });
-
-    // C. INTERCEPTADOR AUTOMÁTICO DE ARQUIVO UPLOAD .JSON
-    document.addEventListener('change', async function(event) {
-        let elemento = event.target;
-        if(elemento.type === 'file' || elemento.id.includes('import') || elemento.id.includes('json')) {
-            const file = elemento.files[0];
-            if (!file) return;
-            event.preventDefault();
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                await processarImportacaoTexto(evt.target.result);
-                elemento.value = ""; 
-            };
-            reader.readAsText(file);
-        }
-    });
 }
 
 // Inicialização imediata das rotinas
