@@ -152,7 +152,7 @@ function handleLogoutActions() {
 }
 
 // ==========================================
-// 2. INICIALIZAÇÃO E CARGA DO FIREBASE
+// 2. INICIALIZAÇÃO E CARGA MISTA DO BANCO
 // ==========================================
 async function initApp() {
     await carregarCanaisDinamicos();
@@ -165,8 +165,14 @@ async function recarregarDadosDoBanco() {
         const data = await res.json();
         database = [];
         if (data) {
-            if (Array.isArray(data)) { database = data.filter(item => item !== null); }
-            else { Object.keys(data).forEach(key => { if (data[key]) database.push({ idFirebase: key, ...data[key] }); }); }
+            // MOTOR MISTO: Lê corretamente se os dados vieram como lista pura (Array) ou chaves dinâmicas (Objetos)
+            if (Array.isArray(data)) { 
+                database = data.filter(item => item !== null); 
+            } else { 
+                Object.keys(data).forEach(key => { 
+                    if (data[key]) database.push({ idFirebase: key, ...data[key] }); 
+                }); 
+            }
         }
     } catch (e) { console.log("Erro ao carregar mídias.", e); }
     finally { renderSidebar(); renderMosaic(); setupEventListeners(); alimentarSeletorCategoriasCanais(); }
@@ -452,6 +458,13 @@ function playTrack(index) {
     }
 }
 
+function extractYoutubeId(url) {
+    if (!url) return null; const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|\/shorts\/)([^#\&\?]*).*/; const match = url.match(regExp);
+    if (match && match[2].length === 11) return match[2];
+    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) return url.trim();
+    return null;
+}
+
 // ==========================================
 // 7. ÁRVORE GERENCIAL SANFONA (CRUD)
 // ==========================================
@@ -503,7 +516,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. PERSISTÊNCIA EM BLOCO E PROCESSAMENTO JSON
+// 8. PERSISTÊNCIA EM BLOCO E PROCESSO JSON + MULTI-CORES
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -559,7 +572,6 @@ async function saveMediaToDatabase(e) {
     } catch (err) { alert("Erro ao salvar."); }
 }
 
-// INJETOR DIRETO DA CAIXA DE TEXTO JSON
 async function importarCodigoJSON() {
     const campoTexto = document.getElementById('json-input-field');
     if (!campoTexto || !campoTexto.value.trim()) return alert("Por favor, cole o código JSON antes.");
@@ -588,35 +600,26 @@ async function importarCodigoJSON() {
     } catch (err) { alert("O código colado possui erros de sintaxe. Detalhes: " + err.message); }
 }
 
-// LÓGICA DO ARRASTE DO MOUSE/TOQUE DO SELETOR DE CORES LINEAR
+// MOTOR DE ARRASTE DA SETA DO PHOTOSHOP (LINEAR SPECTRUM PICKER)
 function inicializarSeletorCoresLinear() {
     const bar = document.getElementById('color-spectrum-bar');
     const selector = document.getElementById('color-spectrum-selector');
     if (!bar || !selector) return;
 
     let isDragging = false;
-
-    // Array de cores correspondente ao gradiente CSS do style.css
-    const coresGradiente = [
-        "#000000", "#ff0000", "#ff00ff", "#0000ff", 
-        "#00ffff", "#00ff00", "#ffff00", "#ff0000", "#ffffff"
-    ];
+    const coresGradiente = ["#000000", "#ff0000", "#ff00ff", "#0000ff", "#00ffff", "#00ff00", "#ffff00", "#ff0000", "#ffffff"];
 
     function calcularCorPelaPosicao(e) {
         const rect = bar.getBoundingClientRect();
-        let x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+        let clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        let x = clientX - rect.left;
         
-        // Limita o movimento dentro das bordas da barra
         if (x < 0) x = 0;
         if (x > rect.width) x = rect.width;
 
-        // Converte a posição X em percentagem (0% a 100%)
         let percent = x / rect.width;
-        
-        // Posiciona a seta visualmente
         selector.style.left = (percent * 100) + '%';
 
-        // Descobre entre quais cores do espectro a seta está passando
         let segment = percent * (coresGradiente.length - 1);
         let index = Math.floor(segment);
         let factor = segment - index;
@@ -624,25 +627,17 @@ function inicializarSeletorCoresLinear() {
         let cor1 = coresGradiente[index];
         let cor2 = coresGradiente[index + 1] || coresGradiente[index];
 
-        // Interpolação matemática de cores RGB para gerar o tom exato
-        let rgb1 = hexToRgb(cor1);
-        let rgb2 = hexToRgb(cor2);
-
+        let rgb1 = hexToRgb(cor1); let rgb2 = hexToRgb(cor2);
         let r = Math.round(rgb1.r + factor * (rgb2.r - rgb1.r));
         let g = Math.round(rgb1.g + factor * (rgb2.g - rgb1.g));
         let b = Math.round(rgb1.b + factor * (rgb2.b - rgb1.b));
 
         let hexResult = rgbToHex(r, g, b);
-        
         aplicarCorTema(hexResult);
 
-        // Salva a preferência exclusiva do administrador atual logado
-        if(currentUser) {
-            localStorage.setItem(`streamhub_theme_${currentUser}`, hexResult);
-        }
+        if(currentUser) localStorage.setItem(`streamhub_theme_${currentUser}`, hexResult);
     }
 
-    // Auxiliares de conversão
     function hexToRgb(hex) {
         let num = parseInt(hex.replace("#",""), 16);
         return { r: num >> 16, g: (num >> 8) & 0x00FF, b: num & 0x0000FF };
@@ -651,7 +646,6 @@ function inicializarSeletorCoresLinear() {
         return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     }
 
-    // Eventos de ativação do arraste (Suporta Mouse e Mobile Touch)
     bar.addEventListener('mousedown', (e) => { isDragging = true; calcularCorPelaPosicao(e); });
     document.addEventListener('mousemove', (e) => { if (isDragging) calcularCorPelaPosicao(e); });
     document.addEventListener('mouseup', () => isDragging = false);
@@ -661,12 +655,9 @@ function inicializarSeletorCoresLinear() {
     document.addEventListener('touchend', () => isDragging = false);
 }
 
-// Reposiciona a seta visualmente no espectro quando o usuário loga
 function posicionarSetaPelaCor(hexColor) {
     const selector = document.getElementById('color-spectrum-selector');
     if (!selector) return;
-    
-    // Mapeamento aproximado de fallbacks visuais de inicialização
     if(hexColor.toLowerCase() === "#3498db") selector.style.left = "33%";
     if(hexColor.toLowerCase() === "#e74c3c") selector.style.left = "12%";
 }
@@ -741,13 +732,17 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// 9. MAPA DE EVENTOS E LISTENERS FIXOS
+// 9. MAPA DE EVENTOS E LINKS BREADCRUMB (FIXADO)
 // ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
     if (document.getElementById('search-internal-input')) document.getElementById('search-internal-input').oninput = (e) => filterInternalDatabase(e.target.value);
     if (document.getElementById('toggle-sidebar')) document.getElementById('toggle-sidebar').onclick = (e) => { e.preventDefault(); handleToggleSidebar(); };
-    if (document.getElementById('bc-root')) document.getElementById('bc-root').onclick = () => { currentView = 'categories'; renderMosaic(); };
+    
+    // FIX CLIQUES DOS BREADCRUMBS
+    if (document.getElementById('bc-root')) document.getElementById('bc-root').onclick = () => { currentView = 'categories'; selectedCategory=''; selectedSubcategory=''; renderMosaic(); };
+    if (document.getElementById('bc-home')) document.getElementById('bc-home').onclick = () => { currentView = 'categories'; selectedCategory=''; selectedSubcategory=''; renderMosaic(); };
+    if (document.getElementById('bc-category')) document.getElementById('bc-category').onclick = () => { currentView = 'subcategories'; selectedSubcategory=''; renderMosaic(); };
 
     const btnFetchManual = document.getElementById('btn-fetch-manual');
     if (btnFetchManual) {
@@ -786,7 +781,6 @@ function setupEventListeners() {
     if (document.getElementById('btn-submit-edit-media')) document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
-    // BIND EXPORTAR INTEGRAIS
     if (document.getElementById('btn-export-all-json')) {
         document.getElementById('btn-export-all-json').onclick = (e) => {
             e.preventDefault();
@@ -795,30 +789,25 @@ function setupEventListeners() {
         };
     }
 
-    // BIND INJETOR DE CÓDIGO
     if (document.getElementById('btn-submit-json-code')) {
         document.getElementById('btn-submit-json-code').onclick = (e) => { e.preventDefault(); importarCodigoJSON(); };
     }
 
-    // BIND SELETOR DO BOTÃO "COR PADRÃO" RESTAURAR
     if (document.getElementById('btn-reset-theme')) {
         document.getElementById('btn-reset-theme').onclick = (e) => {
             e.preventDefault();
             if(currentUser) {
                 localStorage.removeItem(`streamhub_theme_${currentUser}`);
                 let corOriginal = USERS_DATABASE[currentUser] ? USERS_DATABASE[currentUser].defaultColor : "#3498db";
-                aplicarCorTema(corOriginal);
-                posicionarSetaPelaCor(corOriginal);
+                aplicarCorTema(corOriginal); posicionarSetaPelaCor(corOriginal);
             }
         };
     }
 
-    // BIND UPLOAD DE ARQUIVO DE BACKUP .JSON
     const fileImport = document.getElementById('file-import-json');
     if (fileImport) {
         fileImport.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const file = e.target.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = async (evt) => {
                 try {
@@ -832,9 +821,7 @@ function setupEventListeners() {
 
                     if (confirm(`Substituir painel atual por este arquivo contendo ${loteLimpo.length} itens?`)) {
                         let res = await fetch(CONFIG.FIREBASE_URL, {
-                            method: "PUT",
-                            body: JSON.stringify(loteLimpo),
-                            headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+                            method: "PUT", body: JSON.stringify(loteLimpo), headers: { 'Content-Type': 'application/json; charset=UTF-8' }
                         });
                         if (!res.ok) throw new Error("Erro.");
                         alert("Arquivo importado e salvo com sucesso!");
