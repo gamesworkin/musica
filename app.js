@@ -478,25 +478,46 @@ function openAdvancedEditModal(index) {
 
 async function saveAdvancedEditChanges(e) {
     if(e) e.preventDefault();
-    const t = document.getElementById('edit-field-title').value.trim(); const l = document.getElementById('edit-field-link').value.trim();
-    const c = document.getElementById('edit-field-capa').value.trim(); const cat = document.getElementById('edit-field-category').value.trim();
+    const t = document.getElementById('edit-field-title').value.trim(); 
+    const l = document.getElementById('edit-field-link').value.trim();
+    const c = document.getElementById('edit-field-capa').value.trim(); 
+    const cat = document.getElementById('edit-field-category').value.trim();
     const sub = document.getElementById('edit-field-subcategory').value.trim();
+    
     if(!t || !l || !cat) return alert("Campos vazios!");
 
     const itemAlvo = database[activeEditingIndex];
     const payload = { título: t, link: l, capa: c, categoria: cat, subcategoria: sub };
 
+    // DIAGNÓSTICO: Mostra exatamente para onde o app está tentando enviar o dado
+    const urlDestino = obterUrlNodoItem(itemAlvo.idFirebase);
+    console.log("Tentando gravar em:", urlDestino);
+    console.log("Dados sendo enviados:", JSON.stringify(payload));
+
     try {
-        if (itemAlvo.idFirebase) {
-            await fetch(obterUrlNodoItem(itemAlvo.idFirebase), { method: "PUT", body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
-        } else {
-            database[activeEditingIndex] = payload;
-            await fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(database.map(({idFirebase, ...rest}) => rest)), headers: { 'Content-Type': 'application/json' } });
-        }
-        alert("Modificado!"); document.getElementById('edit-media-modal').classList.add('hidden');
-        await recarregarDadosDoBanco(); renderCrudManager();
-    } catch (err) { alert("Erro de gravação."); }
+        let resposta = await fetch(urlDestino, { 
+            method: "PUT", 
+            body: JSON.stringify(payload), 
+            headers: { 'Content-Type': 'application/json' } 
+        });
+        
+        let dadosResposta = await resposta.json();
+        console.log("Resposta do Firebase:", dadosResposta);
+
+        // Alerta de diagnóstico para você ver no celular
+        alert(`Status HTTP: ${resposta.status}\nID do Item: ${itemAlvo.idFirebase || 'Sem ID (Array)'}\nURL Usada: ${urlDestino}`);
+
+        alert("Modificado localmente! Recarregando..."); 
+        document.getElementById('edit-field-title').value = ""; // Limpa campo para testar
+        document.getElementById('edit-media-modal').classList.add('hidden');
+        
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
+    } catch (err) { 
+        alert("Erro crítico na gravação: " + err); 
+    }
 }
+
 
 async function saveMediaToDatabase(e) {
     if(e) e.preventDefault();
