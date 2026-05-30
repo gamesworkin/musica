@@ -3,7 +3,7 @@
 // ==========================================
 const CONFIG = {
     YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
-    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/midias.json" 
+    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/.json" 
 };
 
 // Configuração Multi-utilizador com cores padrão nativas
