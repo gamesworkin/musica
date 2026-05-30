@@ -118,15 +118,20 @@ function handleLogoutActions() {
 // ==========================================
 async function initApp() {
     await carregarCanaisDinamicos();
-    
+    await recarregarDadosDoBanco();
+}
+
+async function recarregarDadosDoBanco() {
     try {
         const res = await fetch(CONFIG.FIREBASE_URL);
         const data = await res.json();
         database = [];
         if (data) {
             if (Array.isArray(data)) {
+                // Filtra slots nulos se o banco vier formatado como array indexado
                 database = data.filter(item => item !== null);
             } else {
+                // Trata o mapeamento de objetos gerados por POST do Firebase
                 Object.keys(data).forEach(key => {
                     if (data[key]) database.push({ idFirebase: key, ...data[key] });
                 });
@@ -777,7 +782,7 @@ function saveAdvancedEditChanges(e) {
     saveState();
 }
 
-// REQUISITO RESTAURADO: Adiciona novas mídias capturadas salvando-as de forma limpa no Firebase
+// CORREÇÃO: Função blindada com método POST individual e callback de atualização síncrona instantânea
 async function saveMediaToDatabase(e) {
     if(e) { e.preventDefault(); }
     
@@ -793,24 +798,36 @@ async function saveMediaToDatabase(e) {
 
     const novaMidia = { título, link: url, capa, categoria, subcategoria };
     
-    // Injeta temporariamente o item novo na memória local e aciona o sincronizador PUT do Firebase
-    database.push(novaMidia);
-    saveState();
-    
-    alert("Mídia salva com sucesso no Firebase!");
-    
-    // Reseta o formulário da aba de inserção
-    document.getElementById('manual-media-url').value = "";
-    document.getElementById('prev-title').value = "";
-    document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Sem+Capa";
-    document.getElementById('media-category').value = "";
-    document.getElementById('media-subcategory').value = "";
-    
-    // Oculta o modal administrativo e volta para a tela inicial
-    const modal = document.getElementById('admin-modal');
-    if (modal) modal.classList.add('hidden');
-    currentView = 'categories';
-    renderMosaic();
+    try {
+        // Envia de forma limpa gerando ID único do nó via POST no Firebase REST
+        await fetch(CONFIG.FIREBASE_URL, {
+            method: 'POST',
+            body: JSON.stringify(novaMidia),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        alert("Mídia salva e injetada com sucesso no Firebase!");
+
+        // Reseta todos os campos do formulário administrativamente
+        document.getElementById('manual-media-url').value = "";
+        document.getElementById('prev-title').value = "";
+        document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Sem+Capa";
+        document.getElementById('media-category').value = "";
+        document.getElementById('media-subcategory').value = "";
+
+        // Oculta o painel gerencial
+        const modal = document.getElementById('admin-modal');
+        if (modal) modal.classList.add('hidden');
+
+        // Força a reinicialização e recarga síncrona do banco de dados na tela principal
+        currentView = 'categories';
+        selectedCategory = '';
+        selectedSubcategory = '';
+        await recarregarDadosDoBanco();
+
+    } catch (err) {
+        alert("Erro de comunicação ao tentar gravar mídia no Firebase.");
+    }
 }
 
 async function deletarMidiaUnica(item) {
@@ -915,7 +932,6 @@ function setupEventListeners() {
     const bcRoot = document.getElementById('bc-root');
     if (bcRoot) bcRoot.onclick = () => { currentView = 'categories'; renderMosaic(); };
 
-    // Captura metadados na inserção manual
     const btnFetchManual = document.getElementById('btn-fetch-manual');
     if (btnFetchManual) {
         btnFetchManual.onclick = async (e) => {
@@ -943,7 +959,6 @@ function setupEventListeners() {
         };
     }
 
-    // GATILHO REPARADO: Conecta o clique no botão "Salvar no meu Firebase" com o método correspondente
     const btnSaveMedia = document.getElementById('btn-save-media');
     if (btnSaveMedia) {
         btnSaveMedia.onclick = (e) => {
