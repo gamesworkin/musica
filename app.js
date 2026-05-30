@@ -250,7 +250,7 @@ function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, cl
 }
 
 // ==========================================
-// 4. CHAMADAS DA API DE CANAIS DINÂMICOS
+// 4. API DE CANAIS
 // ==========================================
 async function buscarVideosRecentesDoCanal(playlistId) {
     const grid = document.getElementById('mosaic-grid');
@@ -307,7 +307,7 @@ function configurarEventosBuscaCanal() {
 }
 
 // ==========================================
-// 5. COMPONENTES DE INTERFACE E FILTROS
+// 5. INTERFACE E SIDEBAR
 // ==========================================
 function renderSidebar() {
     const tree = document.getElementById('sidebar-tree'); if (!tree) return; tree.innerHTML = '';
@@ -416,7 +416,7 @@ function extractYoutubeId(url) {
 }
 
 // ==========================================
-// 7. ÁRVORE GERENCIAL SANFONA (CRUD)
+// 7. ÁRVORE GERENCIAL (CRUD)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list'); if (!listContainer) return; listContainer.innerHTML = '';
@@ -466,7 +466,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. MANIPULAÇÃO E ATUALIZAÇÃO DO BANCO
+// 8. PERSISTÊNCIA, IMPORTAÇÃO E EXPORTAÇÃO (CORRIGIDO)
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -522,41 +522,35 @@ async function saveMediaToDatabase(e) {
     } catch (err) { alert("Erro ao salvar."); }
 }
 
-// CORREÇÃO: Função de processamento e injeção do código JSON colado no campo de texto
-async function importarCodigoJSON() {
-    const campoTexto = document.getElementById('json-input-field'); // Ajuste o ID conforme seu HTML
-    if (!campoTexto || !campoTexto.value.trim()) return alert("Cole o código JSON no campo antes de importar.");
-    
+// EXECUÇÃO DE IMPORTAÇÃO POR CÓDIGO (BLINDADA)
+async function processarImportacaoTexto(conteudoTexto) {
+    if (!conteudoTexto || !conteudoTexto.trim()) {
+        alert("O campo de texto está vazio.");
+        return;
+    }
     try {
-        let parsed = JSON.parse(campoTexto.value.trim());
+        let parsed = JSON.parse(conteudoTexto.trim());
         let loteValidado = [];
-        
-        if (Array.isArray(parsed)) {
-            loteValidado = parsed;
-        } else if (typeof parsed === 'object') {
-            Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
-        }
-        
-        if (loteValidado.length === 0) throw new Error("O JSON não contém registros válidos.");
-        
-        // Remove chaves Firebase antigas que vieram no texto para evitar conflitos
+        if (Array.isArray(parsed)) loteValidado = parsed;
+        else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
+
+        if (loteValidado.length === 0) throw new Error("JSON sem registros válidos.");
         const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
-        
-        if (confirm(`Deseja sobrescrever seu Firebase com estes ${loteLimpo.length} itens?`)) {
+
+        if (confirm(`Deseja importar e sobrescrever seu Firebase com estes ${loteLimpo.length} itens?`)) {
             let res = await fetch(CONFIG.FIREBASE_URL, {
                 method: "PUT",
                 body: JSON.stringify(loteLimpo),
                 headers: { 'Content-Type': 'application/json; charset=UTF-8' }
             });
-            if (!res.ok) throw new Error("Erro de resposta do Firebase.");
-            alert("Código JSON importado e salvo com sucesso!");
-            campoTexto.value = "";
+            if (!res.ok) throw new Error("Resposta negativa do Firebase.");
+            alert("Mídias importadas com sucesso!");
             currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
             await recarregarDadosDoBanco();
             renderCrudManager();
         }
     } catch (err) {
-        alert("Erro ao validar ou salvar o código JSON. Certifique-se de que a formatação está correta. Detalhes: " + err.message);
+        alert("Erro ao validar dados JSON: " + err.message);
     }
 }
 
@@ -610,7 +604,6 @@ function saveState() {
 }
 
 function downloadJSON(obj, filename) {
-    // Remove os IDs do Firebase locais ao gerar arquivos de backup limpos
     const prepararObjeto = Array.isArray(obj) ? obj.map(({idFirebase, ...r}) => r) : obj;
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(prepararObjeto, null, 2));
     const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", `${filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_backup.json`);
@@ -623,6 +616,7 @@ function handleToggleSidebar() {
     else { sidebar.classList.toggle('collapsed'); sidebar.classList.remove('open'); }
 }
 
+// Chaveamento de abas
 function switchTabs(targetTabId, activeTriggerBtnId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -631,7 +625,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// 9. EVENT LISTENERS GERAIS
+// 9. EVENT LISTENERS E MAPEAMENTO MULTI-ID
 // ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
@@ -677,62 +671,58 @@ function setupEventListeners() {
     if (document.getElementById('btn-submit-edit-media')) document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
-    // CORREÇÃO: Evento do botão de exportação completa do banco de mídias
-    const btnExportEverything = document.getElementById('btn-export-all-json'); // Ajuste o ID conforme seu HTML
-    if (btnExportEverything) {
-        btnExportEverything.onclick = (e) => {
+    // =========================================================
+    // MAPEAMENTO ROBUSTO DOS BOTÕES DE IMPORTAR / EXPORTAR
+    // =========================================================
+
+    // 1. AÇÃO DE EXPORTAR TUDO (Tenta mapear múltiplos IDs possíveis do HTML)
+    const idsExportar = ['btn-export-all-json', 'btn-export-everything', 'btn-exportar-json'];
+    let btnExport = null;
+    for (let id of idsExportar) {
+        if(document.getElementById(id)) { btnExport = document.getElementById(id); break; }
+    }
+    if (btnExport) {
+        btnExport.onclick = (e) => {
             e.preventDefault();
-            if (database.length === 0) return alert("Não há registros no banco de dados para exportar.");
-            downloadJSON(database, "backup_completo_streamhub");
+            if (database.length === 0) return alert("Não há registros para exportar.");
+            downloadJSON(database, "backup_streamhub_completo");
         };
     }
 
-    // CORREÇÃO: Evento do campo seletor de arquivo JSON (Upload .json)
-    const fileInputImport = document.getElementById('file-import-json'); // Ajuste o ID conforme seu HTML
-    if (fileInputImport) {
-        fileInputImport.onchange = (e) => {
+    // 2. AÇÃO DE IMPORTAR ARQUIVO UPLOAD .JSON
+    const idsUpload = ['file-import-json', 'file-upload-json', 'json-file-input'];
+    let fileInput = null;
+    for (let id of idsUpload) {
+        if(document.getElementById(id)) { fileInput = document.getElementById(id); break; }
+    }
+    if (fileInput) {
+        fileInput.onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
             const reader = new FileReader();
             reader.onload = async (evt) => {
-                try {
-                    let parsed = JSON.parse(evt.target.result);
-                    let loteValidado = [];
-                    if (Array.isArray(parsed)) loteValidado = parsed;
-                    else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
-
-                    if (loteValidado.length === 0) throw new Error("O arquivo não contém registros válidos.");
-                    
-                    const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
-
-                    if (confirm(`Confirmar importação de arquivo com ${loteLimpo.length} mídias? Isso substituirá seu painel atual.`)) {
-                        let res = await fetch(CONFIG.FIREBASE_URL, {
-                            method: "PUT",
-                            body: JSON.stringify(loteLimpo),
-                            headers: { 'Content-Type': 'application/json; charset=UTF-8' }
-                        });
-                        if (!res.ok) throw new Error("Erro ao gravar lote.");
-                        alert("Arquivo de backup importado e salvo com sucesso!");
-                        fileInputImport.value = ""; // Limpa campo de arquivo
-                        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
-                        await recarregarDadosDoBanco();
-                        renderCrudManager();
-                    }
-                } catch(err) {
-                    alert("Erro ao ler ou validar o arquivo JSON enviado. Detalhes: " + err.message);
-                }
+                await processarImportacaoTexto(evt.target.result);
+                fileInput.value = ""; 
             };
             reader.readAsText(file);
         };
     }
 
-    // CORREÇÃO: Evento do botão associado ao campo de texto JSON
-    const btnImportCodeTrigger = document.getElementById('btn-submit-json-code'); // Ajuste o ID conforme seu HTML
-    if (btnImportCodeTrigger) {
-        btnImportCodeTrigger.onclick = (e) => {
+    // 3. AÇÃO DE IMPORTAR VIA CAMPO DE TEXTO / ÁREA DE TEXTO COLA-CÓDIGO
+    const idsAreaTexto = ['json-input-field', 'json-textarea', 'text-import-json'];
+    const idsBotaoTrigger = ['btn-submit-json-code', 'btn-import-code', 'btn-salvar-json-texto'];
+    
+    let areaTexto = null;
+    let btnTriggerTexto = null;
+    
+    for (let id of idsAreaTexto) { if(document.getElementById(id)) { areaTexto = document.getElementById(id); break; } }
+    for (let id of idsBotaoTrigger) { if(document.getElementById(id)) { btnTriggerTexto = document.getElementById(id); break; } }
+
+    if (btnTriggerTexto && areaTexto) {
+        btnTriggerTexto.onclick = async (e) => {
             e.preventDefault();
-            importarCodigoJSON();
+            await processarImportacaoTexto(areaTexto.value);
+            areaTexto.value = "";
         };
     }
 
