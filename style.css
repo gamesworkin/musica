@@ -2,11 +2,8 @@
    VARIÁVEIS DINÂMICAS DO TEMA
    ========================================== */
 :root {
-    /* O JavaScript alterará estas duas variáveis de acordo com o utilizador ligado */
     --theme-color: #3498db; 
     --theme-color-hover: #2980b9;
-    
-    /* Cores de fundo fixas do seu layout original */
     --bg-main: #121214;
     --bg-card: #202024;
     --bg-sidebar: #1e1e24;
@@ -46,7 +43,6 @@ button:active {
     transform: scale(0.98);
 }
 
-/* Elementos sincronizados com a cor do utilizador */
 .btn-primary { 
     background: var(--theme-color); 
     color: #fff; 
@@ -63,7 +59,7 @@ button:active {
 }
 
 /* ==========================================
-   1. TELA DE LOGIN
+   1. TELA DE LOGIN & ESTILIZAÇÃO DA LOGO
    ========================================== */
 .login-container {
     display: flex;
@@ -81,6 +77,19 @@ button:active {
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
     width: 100%;
     max-width: 400px;
+}
+
+/* Centralizador da Logo 128x128 */
+.login-logo-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.login-logo-img {
+    object-fit: contain;
+    border-radius: 8px;
 }
 
 .login-box h2 {
@@ -352,7 +361,6 @@ button:active {
     width: 100%;
 }
 
-/* Barra horizontal com o gradiente completo do arco-íris */
 .color-spectrum-bar {
     width: 100%;
     height: 22px;
@@ -373,7 +381,6 @@ button:active {
     );
 }
 
-/* Seta marcadora que desliza sobre o gradiente */
 .color-spectrum-selector {
     position: absolute;
     top: -8px;
@@ -381,7 +388,7 @@ button:active {
     width: 12px;
     height: 38px;
     transform: translateX(-50%);
-    pointer-events: none; /* Permite que o clique passe direto para a barra */
+    pointer-events: none;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
