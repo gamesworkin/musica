@@ -128,10 +128,8 @@ async function recarregarDadosDoBanco() {
         database = [];
         if (data) {
             if (Array.isArray(data)) {
-                // Filtra slots nulos se o banco vier formatado como array indexado
                 database = data.filter(item => item !== null);
             } else {
-                // Trata o mapeamento de objetos gerados por POST do Firebase
                 Object.keys(data).forEach(key => {
                     if (data[key]) database.push({ idFirebase: key, ...data[key] });
                 });
@@ -666,10 +664,9 @@ function renderCrudManager() {
     categories.sort().forEach(cat => {
         if(!cat) return;
         const catRow = createCrudRow(cat, 'categoria', () => {
-            let novo = prompt("Novo nome para a Categoria:", cat);
+            let novo = prompt("Novo nome para a Categoria (todas as mídias associadas serão atualizadas):", cat);
             if(novo && novo.trim() !== "") {
-                database.forEach(item => { if(item.categoria === cat) item.categoria = novo.trim(); });
-                saveState();
+                renomearCategoriaCompleta(cat, novo.trim());
             }
         }, () => {
             if(confirm(`Excluir toda a categoria "${cat}"?`)) deletarCategoriaCompleta(cat);
@@ -747,7 +744,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. PERSISTÊNCIA E OPERAÇÕES CRUD no FIREBASE
+// 8. OPERAÇÕES CRUD INDIVIDUAIS NO FIREBASE (CORRIGIDO)
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index;
@@ -761,7 +758,8 @@ function openAdvancedEditModal(index) {
     if (modal) modal.classList.remove('hidden');
 }
 
-function saveAdvancedEditChanges(e) {
+// CORREÇÃO: PUT direcionado individualmente para o nó correspondente do ID do Firebase
+async function saveAdvancedEditChanges(e) {
     if(e) { e.preventDefault(); }
     const t = document.getElementById('edit-field-title').value.trim();
     const l = document.getElementById('edit-field-link').value.trim();
@@ -771,18 +769,37 @@ function saveAdvancedEditChanges(e) {
 
     if(!t || !l || !cat) return alert("Preencha os campos obrigatórios.");
 
-    database[activeEditingIndex].título = t;
-    database[activeEditingIndex].link = l;
-    database[activeEditingIndex].capa = c;
-    database[activeEditingIndex].categoria = cat;
-    database[activeEditingIndex].subcategoria = sub;
+    const itemAlvo = database[activeEditingIndex];
+    const payloadAtualizado = { título: t, link: l, capa: c, categoria: cat, subcategoria: sub };
 
-    const modal = document.getElementById('edit-media-modal');
-    if (modal) modal.classList.add('hidden');
-    saveState();
+    try {
+        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+        
+        if (itemAlvo.idFirebase) {
+            // Se a mídia tem chave gerada por POST, atualiza cirurgicamente o nó individual dela
+            await fetch(`${baseUrl}/midias/${itemAlvo.idFirebase}.json`, {
+                method: "PUT",
+                body: JSON.stringify(payloadAtualizado)
+            });
+        } else {
+            // Fallback caso seja um índice sequencial antigo (banco limpo em lote antigo)
+            database[activeEditingIndex] = payloadAtualizado;
+            const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
+            await fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) });
+        }
+
+        alert("Mídia atualizada com sucesso no Firebase!");
+        document.getElementById('edit-media-modal').classList.add('hidden');
+        
+        // Força a sincronia total e redesenha visões
+        await recarregarDadosDoBanco();
+        renderCrudManager();
+
+    } catch (err) {
+        alert("Erro ao gravar modificações no Firebase.");
+    }
 }
 
-// CORREÇÃO: Função blindada com método POST individual e callback de atualização síncrona instantânea
 async function saveMediaToDatabase(e) {
     if(e) { e.preventDefault(); }
     
@@ -793,97 +810,126 @@ async function saveMediaToDatabase(e) {
     const subcategoria = document.getElementById('media-subcategory').value.trim();
 
     if(!url || !título || !categoria) {
-        return alert("Por favor preencha todos os campos obrigatórios (Capture os dados da mídia e digite a categoria).");
+        return alert("Por favor preencha todos os campos obrigatórios.");
     }
 
     const novaMidia = { título, link: url, capa, categoria, subcategoria };
     
     try {
-        // Envia de forma limpa gerando ID único do nó via POST no Firebase REST
-        await fetch(CONFIG.FIREBASE_URL, {
+        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+        await fetch(`${baseUrl}/midias.json`, {
             method: 'POST',
             body: JSON.stringify(novaMidia),
             headers: { 'Content-Type': 'application/json' }
         });
         
-        alert("Mídia salva e injetada com sucesso no Firebase!");
+        alert("Mídia salva com sucesso no Firebase!");
 
-        // Reseta todos os campos do formulário administrativamente
         document.getElementById('manual-media-url').value = "";
         document.getElementById('prev-title').value = "";
         document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Sem+Capa";
         document.getElementById('media-category').value = "";
         document.getElementById('media-subcategory').value = "";
 
-        // Oculta o painel gerencial
         const modal = document.getElementById('admin-modal');
         if (modal) modal.classList.add('hidden');
 
-        // Força a reinicialização e recarga síncrona do banco de dados na tela principal
         currentView = 'categories';
         selectedCategory = '';
         selectedSubcategory = '';
         await recarregarDadosDoBanco();
 
     } catch (err) {
-        alert("Erro de comunicação ao tentar gravar mídia no Firebase.");
+        alert("Erro ao gravar mídia.");
     }
 }
 
-async function deletarMidiaUnica(item) {
-    if(item.idFirebase) {
+async function renomearCategoriaCompleta(antiga, nova) {
+    try {
         const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-        await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
-    }
-    database = database.filter(i => i !== item);
-    saveState();
+        const alvos = database.filter(item => item.categoria === antiga);
+        
+        for (let item of alvos) {
+            item.categoria = nova;
+            const { idFirebase, ...payload } = item;
+            if (idFirebase) {
+                await fetch(`${baseUrl}/midias/${idFirebase}.json`, { method: "PUT", body: JSON.stringify(payload) });
+            }
+        }
+        
+        // Se houver canal dinâmico vinculado a essa categoria, migra o nó dele também
+        const oldNodeName = btoa(unescape(encodeURIComponent(antiga))).replace(/=/g, "");
+        if (canaisDinamicos[oldNodeName]) {
+            const newNodeName = btoa(unescape(encodeURIComponent(nova))).replace(/=/g, "");
+            await fetch(`${baseUrl}/canais_dinamicos/${newNodeName}.json`, { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]) });
+            await fetch(`${baseUrl}/canais_dinamicos/${oldNodeName}.json`, { method: "DELETE" });
+        }
+
+        alert(`Categoria alterada para "${nova}" com sucesso!`);
+        await recarregarDadosDoBanco();
+        renderCrudManager();
+    } catch(e) { alert("Erro ao renomear bloco."); }
+}
+
+async function deletarMidiaUnica(item) {
+    try {
+        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
+        if(item.idFirebase) {
+            await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+        } else {
+            // Fallback caso seja index sequencial limpo
+            database = database.filter(i => i !== item);
+            const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
+            await fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) });
+        }
+        alert("Mídia removida!");
+        await recarregarDadosDoBanco();
+        renderCrudManager();
+    } catch(e) { alert("Erro ao excluir."); }
 }
 
 async function deletarSubcategoria(cat, sub) {
     const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-    if(sub === "Vídeos Recentes") {
-        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-        await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
-    } else {
-        const alvos = database.filter(item => item.categoria === cat && item.subcategoria === sub);
-        for(let item of alvos) {
-            if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+    try {
+        if(sub === "Vídeos Recentes") {
+            const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
+            await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
+        } else {
+            const alvos = database.filter(item => item.categoria === cat && item.subcategoria === sub);
+            for(let item of alvos) {
+                if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+            }
         }
-        database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
-    }
-    saveState();
+        alert("Subcategoria limpa!");
+        await recarregarDadosDoBanco();
+        renderCrudManager();
+    } catch(e) { alert("Erro na deleção."); }
 }
 
 async function deletarCategoriaCompleta(cat) {
     const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-    const alvos = database.filter(item => item.categoria === cat);
-    for(let item of alvos) {
-        if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
-    }
-    const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-    await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
-    
-    database = database.filter(item => item.categoria !== cat);
-    saveState();
+    try {
+        const alvos = database.filter(item => item.categoria === cat);
+        for(let item of alvos) {
+            if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+        }
+        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
+        await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
+        
+        alert("Categoria apagada por completo!");
+        currentView = 'categories';
+        await recarregarDadosDoBanco();
+        renderCrudManager();
+    } catch(e) { alert("Erro ao limpar categoria."); }
 }
 
 function saveState() {
+    // Mantido por compatibilidade com backups JSON ou reordenações
     const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
     const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
     
     fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) })
-        .then(() => {
-            fetch(CONFIG.FIREBASE_URL)
-                .then(res => res.json())
-                .then(data => {
-                    database = [];
-                    if(data) {
-                        if (Array.isArray(data)) database = data.filter(i => i !== null);
-                        else Object.keys(data).forEach(k => database.push({ idFirebase: k, ...data[k] }));
-                    }
-                    renderSidebar(); renderMosaic(); renderCrudManager(); alimentarSeletorCategoriasCanais();
-                });
-        });
+        .then(() => recarregarDadosDoBanco());
 }
 
 function downloadJSON(obj, filename) {
