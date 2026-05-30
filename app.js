@@ -94,24 +94,19 @@ function handleLogin() {
     }
 }
 
-// CORREÇÃO LOGOUT: Força a limpeza de estados locais e exibe a tela de Login limpa
 function handleLogoutActions() {
     localStorage.removeItem('streamhub_session');
-    
-    // Para a execução de players ativos
-    if (ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(e){} }
+    if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e){} }
     const universalPlayer = document.getElementById('universal-player');
     if (universalPlayer) universalPlayer.src = "";
     const rawPlayer = document.getElementById('raw-player');
     if (rawPlayer) { rawPlayer.pause(); rawPlayer.src = ""; }
 
-    // Reseta campos visuais de credenciais
     const userField = document.getElementById('login-user');
     const passField = document.getElementById('login-pass');
     if (userField) userField.value = "";
     if (passField) passField.value = "";
 
-    // Chaveia visibilidade de containers
     const appContainer = document.getElementById('app-container');
     const loginScreen = document.getElementById('login-screen');
     if (appContainer) appContainer.classList.add('hidden');
@@ -782,6 +777,42 @@ function saveAdvancedEditChanges(e) {
     saveState();
 }
 
+// REQUISITO RESTAURADO: Adiciona novas mídias capturadas salvando-as de forma limpa no Firebase
+async function saveMediaToDatabase(e) {
+    if(e) { e.preventDefault(); }
+    
+    const url = document.getElementById('manual-media-url').value.trim();
+    const título = document.getElementById('prev-title').value.trim();
+    const capa = document.getElementById('prev-thumb').src;
+    const categoria = document.getElementById('media-category').value.trim();
+    const subcategoria = document.getElementById('media-subcategory').value.trim();
+
+    if(!url || !título || !categoria) {
+        return alert("Por favor preencha todos os campos obrigatórios (Capture os dados da mídia e digite a categoria).");
+    }
+
+    const novaMidia = { título, link: url, capa, categoria, subcategoria };
+    
+    // Injeta temporariamente o item novo na memória local e aciona o sincronizador PUT do Firebase
+    database.push(novaMidia);
+    saveState();
+    
+    alert("Mídia salva com sucesso no Firebase!");
+    
+    // Reseta o formulário da aba de inserção
+    document.getElementById('manual-media-url').value = "";
+    document.getElementById('prev-title').value = "";
+    document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Sem+Capa";
+    document.getElementById('media-category').value = "";
+    document.getElementById('media-subcategory').value = "";
+    
+    // Oculta o modal administrativo e volta para a tela inicial
+    const modal = document.getElementById('admin-modal');
+    if (modal) modal.classList.add('hidden');
+    currentView = 'categories';
+    renderMosaic();
+}
+
 async function deletarMidiaUnica(item) {
     if(item.idFirebase) {
         const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
@@ -884,6 +915,42 @@ function setupEventListeners() {
     const bcRoot = document.getElementById('bc-root');
     if (bcRoot) bcRoot.onclick = () => { currentView = 'categories'; renderMosaic(); };
 
+    // Captura metadados na inserção manual
+    const btnFetchManual = document.getElementById('btn-fetch-manual');
+    if (btnFetchManual) {
+        btnFetchManual.onclick = async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('manual-media-url').value.trim();
+            if(!url) return alert("Insira uma URL antes de capturar dados.");
+            
+            btnFetchManual.innerText = "Buscando...";
+            const vId = extractYoutubeId(url);
+            if (vId) {
+                try {
+                    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${vId}&key=${CONFIG.YT_API_KEY}`);
+                    const data = await res.json();
+                    if (data.items && data.items.length > 0) {
+                        const snip = data.items[0].snippet;
+                        document.getElementById('prev-title').value = snip.title;
+                        document.getElementById('prev-thumb').src = snip.thumbnails.medium ? snip.thumbnails.medium.url : snip.thumbnails.default.url;
+                    }
+                } catch(err) { alert("Erro de comunicação com a API."); }
+            } else {
+                document.getElementById('prev-title').value = "Mídia Externa / Arquivo Local";
+                document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Bruto";
+            }
+            btnFetchManual.innerText = "Capturar Dados";
+        };
+    }
+
+    // GATILHO REPARADO: Conecta o clique no botão "Salvar no meu Firebase" com o método correspondente
+    const btnSaveMedia = document.getElementById('btn-save-media');
+    if (btnSaveMedia) {
+        btnSaveMedia.onclick = (e) => {
+            saveMediaToDatabase(e);
+        };
+    }
+
     const btnOpenAdmin = document.getElementById('btn-open-admin');
     if (btnOpenAdmin) {
         btnOpenAdmin.onclick = (e) => {
@@ -955,7 +1022,6 @@ function setupEventListeners() {
         };
     }
 
-    // GATILHO DO BOTÃO DE SAIR CORRIGIDO: Atrela diretamente o manipulador de clique
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) {
         btnLogout.onclick = (e) => {
