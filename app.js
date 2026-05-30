@@ -465,13 +465,15 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
     return row;
 }
 
-// ==========================================
-// 8. PERSISTÊNCIA, IMPORTAÇÃO E EXPORTAÇÃO (CORRIGIDO)
-// ==========================================
+// =========================================================
+// 8. PERSISTÊNCIA, EXPORTAÇÃO E IMPORTAÇÃO DEFINITIVA (SINCER)
+// =========================================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
-    document.getElementById('edit-field-title').value = item.título || ""; document.getElementById('edit-field-link').value = item.link || "";
-    document.getElementById('edit-field-capa').value = item.capa || ""; document.getElementById('edit-field-category').value = item.categoria || "";
+    document.getElementById('edit-field-title').value = item.título || ""; 
+    document.getElementById('edit-field-link').value = item.link || "";
+    document.getElementById('edit-field-capa').value = item.capa || ""; 
+    document.getElementById('edit-field-category').value = item.categoria || "";
     document.getElementById('edit-field-subcategory').value = item.subcategoria || "";
     if (document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.remove('hidden');
 }
@@ -501,7 +503,8 @@ async function saveAdvancedEditChanges(e) {
             headers: { 'Content-Type': 'application/json; charset=UTF-8' } 
         });
         if (!resposta.ok) throw new Error(`Erro HTTP: ${resposta.status}`);
-        alert("Alterações gravadas!"); document.getElementById('edit-media-modal').classList.add('hidden');
+        alert("Alterações gravadas!"); 
+        document.getElementById('edit-media-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
         await recarregarDadosDoBanco(); renderCrudManager();
     } catch (err) { alert("Erro de gravação global: " + err.message); }
@@ -509,25 +512,25 @@ async function saveAdvancedEditChanges(e) {
 
 async function saveMediaToDatabase(e) {
     if(e) e.preventDefault();
-    const url = document.getElementById('manual-media-url').value.trim(); const título = document.getElementById('prev-title').value.trim();
-    const capa = document.getElementById('prev-thumb').src; const categoria = document.getElementById('media-category').value.trim();
+    const url = document.getElementById('manual-media-url').value.trim(); 
+    const título = document.getElementById('prev-title').value.trim();
+    const capa = document.getElementById('prev-thumb').src; 
+    const categoria = document.getElementById('media-category').value.trim();
     const subcategoria = document.getElementById('media-subcategory').value.trim();
     if(!url || !título || !categoria) return alert("Preencha os campos!");
 
     try {
         await fetch(CONFIG.FIREBASE_URL, { method: 'POST', body: JSON.stringify({ título, link: url, capa, categoria, subcategoria }), headers: { 'Content-Type': 'application/json' } });
-        alert("Salvo com sucesso!"); document.getElementById('manual-media-url').value = "";
+        alert("Salvo com sucesso!"); 
+        document.getElementById('manual-media-url').value = "";
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco();
     } catch (err) { alert("Erro ao salvar."); }
 }
 
-// EXECUÇÃO DE IMPORTAÇÃO POR CÓDIGO (BLINDADA)
+// Executa a importação forçada sobrescrevendo o diretório ativo do Firebase
 async function processarImportacaoTexto(conteudoTexto) {
-    if (!conteudoTexto || !conteudoTexto.trim()) {
-        alert("O campo de texto está vazio.");
-        return;
-    }
+    if (!conteudoTexto || !conteudoTexto.trim()) return alert("O conteúdo JSON está vazio.");
     try {
         let parsed = JSON.parse(conteudoTexto.trim());
         let loteValidado = [];
@@ -537,21 +540,19 @@ async function processarImportacaoTexto(conteudoTexto) {
         if (loteValidado.length === 0) throw new Error("JSON sem registros válidos.");
         const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
 
-        if (confirm(`Deseja importar e sobrescrever seu Firebase com estes ${loteLimpo.length} itens?`)) {
+        if (confirm(`Atenção: Deseja importar e SOBRESCREVER o seu Firebase com estes ${loteLimpo.length} itens?`)) {
             let res = await fetch(CONFIG.FIREBASE_URL, {
                 method: "PUT",
                 body: JSON.stringify(loteLimpo),
                 headers: { 'Content-Type': 'application/json; charset=UTF-8' }
             });
-            if (!res.ok) throw new Error("Resposta negativa do Firebase.");
-            alert("Mídias importadas com sucesso!");
+            if (!res.ok) throw new Error("Erro de resposta do Firebase.");
+            alert("Mídias importadas e salvas com sucesso no Firebase!");
             currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
             await recarregarDadosDoBanco();
             renderCrudManager();
         }
-    } catch (err) {
-        alert("Erro ao validar dados JSON: " + err.message);
-    }
+    } catch (err) { alert("Erro ao validar dados JSON: " + err.message); }
 }
 
 async function renomearCategoriaCompleta(antiga, nova) {
@@ -616,7 +617,6 @@ function handleToggleSidebar() {
     else { sidebar.classList.toggle('collapsed'); sidebar.classList.remove('open'); }
 }
 
-// Chaveamento de abas
 function switchTabs(targetTabId, activeTriggerBtnId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -624,9 +624,9 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
     if (triggerBtn) triggerBtn.classList.add('active'); if (targetTab) targetTab.classList.remove('hidden');
 }
 
-// ==========================================
-// 9. EVENT LISTENERS E MAPEAMENTO MULTI-ID
-// ==========================================
+// =========================================================
+// 9. EVENT LISTENERS E RASTREADOR DE CLIQUES DE BACKUP (BLINDADO)
+// =========================================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
     if (document.getElementById('search-internal-input')) document.getElementById('search-internal-input').oninput = (e) => filterInternalDatabase(e.target.value);
@@ -656,9 +656,7 @@ function setupEventListeners() {
             } catch(err) { 
                 document.getElementById('prev-title').value = "Link Capturado";
                 document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Mídia";
-            } finally {
-                btnFetchManual.innerText = "Capturar Dados";
-            }
+            } finally { btnFetchManual.innerText = "Capturar Dados"; }
         };
     }
 
@@ -671,61 +669,6 @@ function setupEventListeners() {
     if (document.getElementById('btn-submit-edit-media')) document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
-    // =========================================================
-    // MAPEAMENTO ROBUSTO DOS BOTÕES DE IMPORTAR / EXPORTAR
-    // =========================================================
-
-    // 1. AÇÃO DE EXPORTAR TUDO (Tenta mapear múltiplos IDs possíveis do HTML)
-    const idsExportar = ['btn-export-all-json', 'btn-export-everything', 'btn-exportar-json'];
-    let btnExport = null;
-    for (let id of idsExportar) {
-        if(document.getElementById(id)) { btnExport = document.getElementById(id); break; }
-    }
-    if (btnExport) {
-        btnExport.onclick = (e) => {
-            e.preventDefault();
-            if (database.length === 0) return alert("Não há registros para exportar.");
-            downloadJSON(database, "backup_streamhub_completo");
-        };
-    }
-
-    // 2. AÇÃO DE IMPORTAR ARQUIVO UPLOAD .JSON
-    const idsUpload = ['file-import-json', 'file-upload-json', 'json-file-input'];
-    let fileInput = null;
-    for (let id of idsUpload) {
-        if(document.getElementById(id)) { fileInput = document.getElementById(id); break; }
-    }
-    if (fileInput) {
-        fileInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                await processarImportacaoTexto(evt.target.result);
-                fileInput.value = ""; 
-            };
-            reader.readAsText(file);
-        };
-    }
-
-    // 3. AÇÃO DE IMPORTAR VIA CAMPO DE TEXTO / ÁREA DE TEXTO COLA-CÓDIGO
-    const idsAreaTexto = ['json-input-field', 'json-textarea', 'text-import-json'];
-    const idsBotaoTrigger = ['btn-submit-json-code', 'btn-import-code', 'btn-salvar-json-texto'];
-    
-    let areaTexto = null;
-    let btnTriggerTexto = null;
-    
-    for (let id of idsAreaTexto) { if(document.getElementById(id)) { areaTexto = document.getElementById(id); break; } }
-    for (let id of idsBotaoTrigger) { if(document.getElementById(id)) { btnTriggerTexto = document.getElementById(id); break; } }
-
-    if (btnTriggerTexto && areaTexto) {
-        btnTriggerTexto.onclick = async (e) => {
-            e.preventDefault();
-            await processarImportacaoTexto(areaTexto.value);
-            areaTexto.value = "";
-        };
-    }
-
     if (document.getElementById('btn-close-player')) {
         document.getElementById('btn-close-player').onclick = (e) => {
             e.preventDefault(); if(ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(err){} }
@@ -737,6 +680,71 @@ function setupEventListeners() {
 
     if (document.getElementById('btn-logout')) document.getElementById('btn-logout').onclick = (e) => { e.preventDefault(); handleLogoutActions(); };
     configurarEventosBuscaCanal();
+
+    // =========================================================================
+    // DETECTOR DE INTERCEPTAÇÃO GLOBAL (Garante o funcionamento independente do ID)
+    // =========================================================================
+    document.addEventListener('click', async function(event) {
+        let elemento = event.target;
+        
+        // Se clicou dentro de uma tag i ou span interna do botão, sobe para o elemento pai
+        if(elemento.tagName === 'I' || elemento.tagName === 'SPAN') {
+            elemento = elemento.parentElement;
+        }
+
+        let textoBotao = (elemento.innerText || "").toLowerCase();
+        let idBotao = (elemento.id || "").toLowerCase();
+        let classesBotao = (elemento.className || "").toLowerCase();
+
+        // A. INTERCEPTADOR DE EXPORTAÇÃO
+        if(idBotao.includes('export') || textoBotao.includes('exportar') || classesBotao.includes('export')) {
+            if(idBotao.includes('all') || idBotao.includes('tudo') || textoBotao.includes('tudo') || textoBotao.includes('completo')) {
+                event.preventDefault(); event.stopPropagation();
+                if (database.length === 0) return alert("Não há registros para exportar.");
+                downloadJSON(database, "backup_streamhub_completo");
+            }
+        }
+
+        // B. INTERCEPTADOR DE IMPORTAÇÃO VIA CÓDIGO (CAMPO DE TEXTO)
+        if(idBotao.includes('submit') || idBotao.includes('import') || textoBotao.includes('importar') || textoBotao.includes('enviar') || textoBotao.includes('salvar')) {
+            if(textoBotao.includes('código') || textoBotao.includes('texto') || idBotao.includes('code') || idBotao.includes('text')) {
+                event.preventDefault(); event.stopPropagation();
+                
+                // Procura na tela qualquer campo de texto ou textarea
+                let caixasTexto = document.querySelectorAll('textarea, input[type="text"]');
+                let conteudoLocalizado = "";
+                let campoAlvoElemento = null;
+
+                for(let caixa of caixasTexto) {
+                    let val = caixa.value.trim();
+                    if(val.startsWith('[') || val.startsWith('{')) { conteudoLocalizado = val; campoAlvoElemento = caixa; break; }
+                }
+
+                if(!conteudoLocalizado) {
+                    return alert("Código JSON não localizado. Certifique-se de colar o texto que começa com '[' ou '{' em alguma caixa da tela.");
+                }
+
+                await processarImportacaoTexto(conteudoLocalizado);
+                if(campoAlvoElemento) campoAlvoElemento.value = "";
+            }
+        }
+    });
+
+    // C. INTERCEPTADOR AUTOMÁTICO DE ARQUIVO UPLOAD .JSON
+    document.addEventListener('change', async function(event) {
+        let elemento = event.target;
+        if(elemento.type === 'file' || elemento.id.includes('import') || elemento.id.includes('json')) {
+            const file = elemento.files[0];
+            if (!file) return;
+            event.preventDefault();
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                await processarImportacaoTexto(evt.target.result);
+                elemento.value = ""; 
+            };
+            reader.readAsText(file);
+        }
+    });
 }
 
 // Inicialização imediata das rotinas
