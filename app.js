@@ -408,13 +408,6 @@ function playTrack(index) {
     }
 }
 
-function extractYoutubeId(url) {
-    if (!url) return null; const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|\/shorts\/)([^#\&\?]*).*/; const match = url.match(regExp);
-    if (match && match[2].length === 11) return match[2];
-    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) return url.trim();
-    return null;
-}
-
 // ==========================================
 // 7. ÁRVORE GERENCIAL SANFONA (CRUD)
 // ==========================================
@@ -466,7 +459,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. ESCRIÇÃO INDIVIDUAL EXCLUSIVA (POST/PUT)
+// 8. ESCRIÇÃO EM BLOCO GLOBAL (FIXED)
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -478,8 +471,6 @@ function openAdvancedEditModal(index) {
 
 async function saveAdvancedEditChanges(e) {
     if(e) e.preventDefault();
-    
-    // 1. Captura os novos dados digitados no modal de edição
     const t = document.getElementById('edit-field-title').value.trim(); 
     const l = document.getElementById('edit-field-link').value.trim();
     const c = document.getElementById('edit-field-capa').value.trim(); 
@@ -488,18 +479,17 @@ async function saveAdvancedEditChanges(e) {
     
     if(!t || !l || !cat) return alert("Por favor, preencha os campos obrigatórios!");
 
-    // 2. Atualiza a informação diretamente na nossa lista local (memória)
+    // Injeta as modificações direto no array da memória local
     database[activeEditingIndex].título = t;
     database[activeEditingIndex].link = l;
     database[activeEditingIndex].capa = c;
     database[activeEditingIndex].categoria = cat;
     database[activeEditingIndex].subcategoria = sub;
 
-    // 3. Prepara o lote limpo (remove IDs temporários para evitar duplicações no Firebase)
-    const loteLimpo ParaSalvar = database.map(({idFirebase, ...resto}) => resto);
+    // Remove as chaves locais para enviar um lote de Array limpo e compatível
+    const loteLimpoParaSalvar = database.map(({idFirebase, ...resto}) => resto);
 
     try {
-        // 4. Força a sobrescrita global (Abordagem infalível contra bloqueios de nós)
         let resposta = await fetch(CONFIG.FIREBASE_URL, { 
             method: "PUT", 
             body: JSON.stringify(loteLimpoParaSalvar), 
@@ -509,23 +499,15 @@ async function saveAdvancedEditChanges(e) {
         if (!resposta.ok) throw new Error(`Erro HTTP: ${resposta.status}`);
 
         alert("Alterações gravadas e sincronizadas com sucesso!"); 
-        
-        // 5. Fecha o modal de edição
         document.getElementById('edit-media-modal').classList.add('hidden');
         
-        // 6. Força o download limpo do banco e redesenha o ecrã instantaneamente
         currentView = 'categories';
         selectedCategory = '';
         selectedSubcategory = '';
         await recarregarDadosDoBanco(); 
         renderCrudManager();
-
-    } catch (err) { 
-        alert("Erro definitivo ao gravar no Firebase: " + err.message); 
-    }
+    } catch (err) { alert("Erro de gravação global: " + err.message); }
 }
-
-
 
 async function saveMediaToDatabase(e) {
     if(e) e.preventDefault();
