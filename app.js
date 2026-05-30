@@ -466,7 +466,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. PERSISTÊNCIA EM BLOCO GLOBAL
+// 8. MANIPULAÇÃO E ATUALIZAÇÃO DO BANCO
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -500,15 +500,10 @@ async function saveAdvancedEditChanges(e) {
             body: JSON.stringify(loteLimpoParaSalvar), 
             headers: { 'Content-Type': 'application/json; charset=UTF-8' } 
         });
-
         if (!resposta.ok) throw new Error(`Erro HTTP: ${resposta.status}`);
-
-        alert("Alterações gravadas e sincronizadas com sucesso!"); 
-        document.getElementById('edit-media-modal').classList.add('hidden');
-        
+        alert("Alterações gravadas!"); document.getElementById('edit-media-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
-        await recarregarDadosDoBanco(); 
-        renderCrudManager();
+        await recarregarDadosDoBanco(); renderCrudManager();
     } catch (err) { alert("Erro de gravação global: " + err.message); }
 }
 
@@ -527,9 +522,47 @@ async function saveMediaToDatabase(e) {
     } catch (err) { alert("Erro ao salvar."); }
 }
 
+// CORREÇÃO: Função de processamento e injeção do código JSON colado no campo de texto
+async function importarCodigoJSON() {
+    const campoTexto = document.getElementById('json-input-field'); // Ajuste o ID conforme seu HTML
+    if (!campoTexto || !campoTexto.value.trim()) return alert("Cole o código JSON no campo antes de importar.");
+    
+    try {
+        let parsed = JSON.parse(campoTexto.value.trim());
+        let loteValidado = [];
+        
+        if (Array.isArray(parsed)) {
+            loteValidado = parsed;
+        } else if (typeof parsed === 'object') {
+            Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
+        }
+        
+        if (loteValidado.length === 0) throw new Error("O JSON não contém registros válidos.");
+        
+        // Remove chaves Firebase antigas que vieram no texto para evitar conflitos
+        const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
+        
+        if (confirm(`Deseja sobrescrever seu Firebase com estes ${loteLimpo.length} itens?`)) {
+            let res = await fetch(CONFIG.FIREBASE_URL, {
+                method: "PUT",
+                body: JSON.stringify(loteLimpo),
+                headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+            });
+            if (!res.ok) throw new Error("Erro de resposta do Firebase.");
+            alert("Código JSON importado e salvo com sucesso!");
+            campoTexto.value = "";
+            currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
+            await recarregarDadosDoBanco();
+            renderCrudManager();
+        }
+    } catch (err) {
+        alert("Erro ao validar ou salvar o código JSON. Certifique-se de que a formatação está correta. Detalhes: " + err.message);
+    }
+}
+
 async function renomearCategoriaCompleta(antiga, nova) {
     try {
-        const alvos = database.filter(item => item.categoria === antigua);
+        const alvos = database.filter(item => item.categoria === antiga);
         for (let item of alvos) {
             item.categoria = nova; const { idFirebase, ...payload } = item;
             if (idFirebase) await fetch(obterUrlNodoItem(idFirebase), { method: "PUT", body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
@@ -577,7 +610,9 @@ function saveState() {
 }
 
 function downloadJSON(obj, filename) {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
+    // Remove os IDs do Firebase locais ao gerar arquivos de backup limpos
+    const prepararObjeto = Array.isArray(obj) ? obj.map(({idFirebase, ...r}) => r) : obj;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(prepararObjeto, null, 2));
     const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", `${filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_backup.json`);
     document.body.appendChild(a); a.click(); a.remove();
 }
@@ -596,7 +631,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// 9. EVENT LISTENERS GERAIS (CORRIGIDO)
+// 9. EVENT LISTENERS GERAIS
 // ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
@@ -604,17 +639,10 @@ function setupEventListeners() {
     if (document.getElementById('toggle-sidebar')) document.getElementById('toggle-sidebar').onclick = (e) => { e.preventDefault(); handleToggleSidebar(); };
     if (document.getElementById('bc-root')) document.getElementById('bc-root').onclick = () => { currentView = 'categories'; renderMosaic(); };
 
-    // CORREÇÃO: Função de captura manual com desbloqueio garantido (finally) contra travamentos eternos
-    const btnFetchManual = document.getElementById('btn-fetch-manual');
-    if (btnFetchManual) {
-        btnFetchManual.onclick = async (e) => {
-            e.preventDefault(); 
-            const url = document.getElementById('manual-media-url').value.trim(); 
-            if(!url) return alert("Insira uma URL antes de capturar dados.");
-            
-            btnFetchManual.innerText = "Buscando..."; 
-            const vId = extractYoutubeId(url);
-            
+    if (document.getElementById('btn-fetch-manual')) {
+        document.getElementById('btn-fetch-manual').onclick = async (e) => {
+            e.preventDefault(); const url = document.getElementById('manual-media-url').value.trim(); if(!url) return alert("Insira uma URL.");
+            document.getElementById('btn-fetch-manual').innerText = "Buscando..."; const vId = extractYoutubeId(url);
             try {
                 if (vId) {
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${vId}&key=${CONFIG.YT_API_KEY}`);
@@ -624,21 +652,17 @@ function setupEventListeners() {
                         document.getElementById('prev-title').value = snip.title;
                         document.getElementById('prev-thumb').src = snip.thumbnails.medium ? snip.thumbnails.medium.url : snip.thumbnails.default.url;
                     } else {
-                        // Caso a API do YouTube retorne vazio ou erro de cota
-                        document.getElementById('prev-title').value = "Vídeo do YouTube (Título Indisponível)";
+                        document.getElementById('prev-title').value = "Vídeo do YouTube";
                         document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=YouTube";
                     }
                 } else {
-                    // Links normais, arquivos locais ou embeds genéricos
                     document.getElementById('prev-title').value = "Mídia Externa / Arquivo Local";
                     document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Bruto";
                 }
             } catch(err) { 
-                // Fallback se faltar rede ou falhar a conexão
                 document.getElementById('prev-title').value = "Link Capturado";
                 document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Mídia";
             } finally {
-                // BLINDAGEM: O botão SEMPRE volta ao estado normal aqui, evitando travamento eterno em "Buscando..."
                 btnFetchManual.innerText = "Capturar Dados";
             }
         };
@@ -652,6 +676,65 @@ function setupEventListeners() {
     if (document.getElementById('tab-trigger-channel')) document.getElementById('tab-trigger-channel').onclick = (e) => { e.preventDefault(); switchTabs('channel-tab', 'tab-trigger-channel'); };
     if (document.getElementById('btn-submit-edit-media')) document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
+
+    // CORREÇÃO: Evento do botão de exportação completa do banco de mídias
+    const btnExportEverything = document.getElementById('btn-export-all-json'); // Ajuste o ID conforme seu HTML
+    if (btnExportEverything) {
+        btnExportEverything.onclick = (e) => {
+            e.preventDefault();
+            if (database.length === 0) return alert("Não há registros no banco de dados para exportar.");
+            downloadJSON(database, "backup_completo_streamhub");
+        };
+    }
+
+    // CORREÇÃO: Evento do campo seletor de arquivo JSON (Upload .json)
+    const fileInputImport = document.getElementById('file-import-json'); // Ajuste o ID conforme seu HTML
+    if (fileInputImport) {
+        fileInputImport.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    let parsed = JSON.parse(evt.target.result);
+                    let loteValidado = [];
+                    if (Array.isArray(parsed)) loteValidado = parsed;
+                    else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
+
+                    if (loteValidado.length === 0) throw new Error("O arquivo não contém registros válidos.");
+                    
+                    const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
+
+                    if (confirm(`Confirmar importação de arquivo com ${loteLimpo.length} mídias? Isso substituirá seu painel atual.`)) {
+                        let res = await fetch(CONFIG.FIREBASE_URL, {
+                            method: "PUT",
+                            body: JSON.stringify(loteLimpo),
+                            headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+                        });
+                        if (!res.ok) throw new Error("Erro ao gravar lote.");
+                        alert("Arquivo de backup importado e salvo com sucesso!");
+                        fileInputImport.value = ""; // Limpa campo de arquivo
+                        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
+                        await recarregarDadosDoBanco();
+                        renderCrudManager();
+                    }
+                } catch(err) {
+                    alert("Erro ao ler ou validar o arquivo JSON enviado. Detalhes: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        };
+    }
+
+    // CORREÇÃO: Evento do botão associado ao campo de texto JSON
+    const btnImportCodeTrigger = document.getElementById('btn-submit-json-code'); // Ajuste o ID conforme seu HTML
+    if (btnImportCodeTrigger) {
+        btnImportCodeTrigger.onclick = (e) => {
+            e.preventDefault();
+            importarCodigoJSON();
+        };
+    }
 
     if (document.getElementById('btn-close-player')) {
         document.getElementById('btn-close-player').onclick = (e) => {
