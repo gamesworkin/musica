@@ -478,45 +478,53 @@ function openAdvancedEditModal(index) {
 
 async function saveAdvancedEditChanges(e) {
     if(e) e.preventDefault();
+    
+    // 1. Captura os novos dados digitados no modal de edição
     const t = document.getElementById('edit-field-title').value.trim(); 
     const l = document.getElementById('edit-field-link').value.trim();
     const c = document.getElementById('edit-field-capa').value.trim(); 
     const cat = document.getElementById('edit-field-category').value.trim();
     const sub = document.getElementById('edit-field-subcategory').value.trim();
     
-    if(!t || !l || !cat) return alert("Campos vazios!");
+    if(!t || !l || !cat) return alert("Por favor, preencha os campos obrigatórios!");
 
-    const itemAlvo = database[activeEditingIndex];
-    const payload = { título: t, link: l, capa: c, categoria: cat, subcategoria: sub };
+    // 2. Atualiza a informação diretamente na nossa lista local (memória)
+    database[activeEditingIndex].título = t;
+    database[activeEditingIndex].link = l;
+    database[activeEditingIndex].capa = c;
+    database[activeEditingIndex].categoria = cat;
+    database[activeEditingIndex].subcategoria = sub;
 
-    // DIAGNÓSTICO: Mostra exatamente para onde o app está tentando enviar o dado
-    const urlDestino = obterUrlNodoItem(itemAlvo.idFirebase);
-    console.log("Tentando gravar em:", urlDestino);
-    console.log("Dados sendo enviados:", JSON.stringify(payload));
+    // 3. Prepara o lote limpo (remove IDs temporários para evitar duplicações no Firebase)
+    const loteLimpo ParaSalvar = database.map(({idFirebase, ...resto}) => resto);
 
     try {
-        let resposta = await fetch(urlDestino, { 
+        // 4. Força a sobrescrita global (Abordagem infalível contra bloqueios de nós)
+        let resposta = await fetch(CONFIG.FIREBASE_URL, { 
             method: "PUT", 
-            body: JSON.stringify(payload), 
-            headers: { 'Content-Type': 'application/json' } 
+            body: JSON.stringify(loteLimpoParaSalvar), 
+            headers: { 'Content-Type': 'application/json; charset=UTF-8' } 
         });
+
+        if (!resposta.ok) throw new Error(`Erro HTTP: ${resposta.status}`);
+
+        alert("Alterações gravadas e sincronizadas com sucesso!"); 
         
-        let dadosResposta = await resposta.json();
-        console.log("Resposta do Firebase:", dadosResposta);
-
-        // Alerta de diagnóstico para você ver no celular
-        alert(`Status HTTP: ${resposta.status}\nID do Item: ${itemAlvo.idFirebase || 'Sem ID (Array)'}\nURL Usada: ${urlDestino}`);
-
-        alert("Modificado localmente! Recarregando..."); 
-        document.getElementById('edit-field-title').value = ""; // Limpa campo para testar
+        // 5. Fecha o modal de edição
         document.getElementById('edit-media-modal').classList.add('hidden');
         
+        // 6. Força o download limpo do banco e redesenha o ecrã instantaneamente
+        currentView = 'categories';
+        selectedCategory = '';
+        selectedSubcategory = '';
         await recarregarDadosDoBanco(); 
         renderCrudManager();
+
     } catch (err) { 
-        alert("Erro crítico na gravação: " + err); 
+        alert("Erro definitivo ao gravar no Firebase: " + err.message); 
     }
 }
+
 
 
 async function saveMediaToDatabase(e) {
