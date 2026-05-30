@@ -24,6 +24,27 @@ let canalSelecionadoProvisorio = null;
 let expandedCrudCats = {};
 let expandedCrudSubs = {};
 
+// Função auxiliar interna para descobrir a URL base do nó correto do Firebase
+function obterUrlNodoItem(idItem = null) {
+    // Remove o ".json" do final da URL configurada
+    let urlSemJson = CONFIG.FIREBASE_URL.replace(".json", "");
+    if (idItem) {
+        return `${urlSemJson}/${idItem}.json`;
+    }
+    return CONFIG.FIREBASE_URL;
+}
+
+function obterUrlBaseCanais() {
+    // Descobre a URL da raiz do Firebase para localizar o nó de canais dinâmicos
+    let urlObjeto = new URL(CONFIG.FIREBASE_URL);
+    return `${urlObjeto.origin}/canais_dinamicos.json`;
+}
+
+function obterUrlCanalIndividual(nodeName) {
+    let urlObjeto = new URL(CONFIG.FIREBASE_URL);
+    return `${urlObjeto.origin}/canais_dinamicos/${nodeName}.json`;
+}
+
 // ==========================================
 // 1. AUTENTICAÇÃO COM SESSÃO E ENTER
 // ==========================================
@@ -147,8 +168,7 @@ async function recarregarDadosDoBanco() {
 
 async function carregarCanaisDinamicos() {
     try {
-        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-        const res = await fetch(`${baseUrl}/canais_dinamicos.json`);
+        const res = await fetch(obterUrlBaseCanais());
         const data = await res.json();
         canaisDinamicos = data || {};
     } catch (e) {
@@ -420,17 +440,15 @@ function configurarEventosBuscaCanal() {
             if(!canalSelecionadoProvisorio || !catDestino) return alert("Preencha todos os dados e selecione a categoria.");
 
             try {
-                const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-                const uploadsListId = canalSelecionadoProvisorio.channelId.replace(/^UC/, "UU");
                 const payload = {
                     channelId: canalSelecionadoProvisorio.channelId,
-                    uploadsPlaylistId: uploadsListId,
+                    uploadsPlaylistId: canalSelecionadoProvisorio.channelId.replace(/^UC/, "UU"),
                     title: canalSelecionadoProvisorio.title,
                     thumb: canalSelecionadoProvisorio.thumb
                 };
 
                 const nodeName = btoa(unescape(encodeURIComponent(catDestino))).replace(/=/g, "");
-                await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, {
+                await fetch(obterUrlCanalIndividual(nodeName), {
                     method: "PUT",
                     body: JSON.stringify(payload)
                 });
@@ -758,7 +776,7 @@ function openAdvancedEditModal(index) {
     if (modal) modal.classList.remove('hidden');
 }
 
-// CORREÇÃO: PUT direcionado individualmente para o nó correspondente do ID do Firebase
+// CORREÇÃO MESTRA: PUT direcionado dinamicamente usando o nodo exato mapeado na sua URL
 async function saveAdvancedEditChanges(e) {
     if(e) { e.preventDefault(); }
     const t = document.getElementById('edit-field-title').value.trim();
@@ -773,25 +791,21 @@ async function saveAdvancedEditChanges(e) {
     const payloadAtualizado = { título: t, link: l, capa: c, categoria: cat, subcategoria: sub };
 
     try {
-        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-        
         if (itemAlvo.idFirebase) {
-            // Se a mídia tem chave gerada por POST, atualiza cirurgicamente o nó individual dela
-            await fetch(`${baseUrl}/midias/${itemAlvo.idFirebase}.json`, {
+            // Rota dinâmica síncrona corrigida apontando para o nó correto configurado
+            await fetch(obterUrlNodoItem(itemAlvo.idFirebase), {
                 method: "PUT",
                 body: JSON.stringify(payloadAtualizado)
             });
         } else {
-            // Fallback caso seja um índice sequencial antigo (banco limpo em lote antigo)
             database[activeEditingIndex] = payloadAtualizado;
             const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
-            await fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) });
+            await fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(dadosSalvar) });
         }
 
         alert("Mídia atualizada com sucesso no Firebase!");
         document.getElementById('edit-media-modal').classList.add('hidden');
         
-        // Força a sincronia total e redesenha visões
         await recarregarDadosDoBanco();
         renderCrudManager();
 
@@ -816,8 +830,7 @@ async function saveMediaToDatabase(e) {
     const novaMidia = { título, link: url, capa, categoria, subcategoria };
     
     try {
-        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-        await fetch(`${baseUrl}/midias.json`, {
+        await fetch(CONFIG.FIREBASE_URL, {
             method: 'POST',
             body: JSON.stringify(novaMidia),
             headers: { 'Content-Type': 'application/json' }
@@ -846,23 +859,21 @@ async function saveMediaToDatabase(e) {
 
 async function renomearCategoriaCompleta(antiga, nova) {
     try {
-        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
         const alvos = database.filter(item => item.categoria === antiga);
         
         for (let item of alvos) {
             item.categoria = nova;
             const { idFirebase, ...payload } = item;
             if (idFirebase) {
-                await fetch(`${baseUrl}/midias/${idFirebase}.json`, { method: "PUT", body: JSON.stringify(payload) });
+                await fetch(obterUrlNodoItem(idFirebase), { method: "PUT", body: JSON.stringify(payload) });
             }
         }
         
-        // Se houver canal dinâmico vinculado a essa categoria, migra o nó dele também
         const oldNodeName = btoa(unescape(encodeURIComponent(antiga))).replace(/=/g, "");
         if (canaisDinamicos[oldNodeName]) {
             const newNodeName = btoa(unescape(encodeURIComponent(nova))).replace(/=/g, "");
-            await fetch(`${baseUrl}/canais_dinamicos/${newNodeName}.json`, { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]) });
-            await fetch(`${baseUrl}/canais_dinamicos/${oldNodeName}.json`, { method: "DELETE" });
+            await fetch(obterUrlCanalIndividual(newNodeName), { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]) });
+            await fetch(obterUrlCanalIndividual(oldNodeName), { method: "DELETE" });
         }
 
         alert(`Categoria alterada para "${nova}" com sucesso!`);
@@ -873,14 +884,12 @@ async function renomearCategoriaCompleta(antiga, nova) {
 
 async function deletarMidiaUnica(item) {
     try {
-        const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
         if(item.idFirebase) {
-            await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+            await fetch(obterUrlNodoItem(item.idFirebase), { method: 'DELETE' });
         } else {
-            // Fallback caso seja index sequencial limpo
             database = database.filter(i => i !== item);
             const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
-            await fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) });
+            await fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(dadosSalvar) });
         }
         alert("Mídia removida!");
         await recarregarDadosDoBanco();
@@ -889,15 +898,14 @@ async function deletarMidiaUnica(item) {
 }
 
 async function deletarSubcategoria(cat, sub) {
-    const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
     try {
         if(sub === "Vídeos Recentes") {
             const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-            await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
+            await fetch(obterUrlCanalIndividual(nodeName), { method: 'DELETE' });
         } else {
             const alvos = database.filter(item => item.categoria === cat && item.subcategoria === sub);
             for(let item of alvos) {
-                if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+                if(item.idFirebase) await fetch(obterUrlNodoItem(item.idFirebase), { method: 'DELETE' });
             }
         }
         alert("Subcategoria limpa!");
@@ -907,14 +915,13 @@ async function deletarSubcategoria(cat, sub) {
 }
 
 async function deletarCategoriaCompleta(cat) {
-    const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
     try {
         const alvos = database.filter(item => item.categoria === cat);
         for(let item of alvos) {
-            if(item.idFirebase) await fetch(`${baseUrl}/midias/${item.idFirebase}.json`, { method: 'DELETE' });
+            if(item.idFirebase) await fetch(obterUrlNodoItem(item.idFirebase), { method: 'DELETE' });
         }
         const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-        await fetch(`${baseUrl}/canais_dinamicos/${nodeName}.json`, { method: 'DELETE' });
+        await fetch(obterUrlCanalIndividual(nodeName), { method: 'DELETE' });
         
         alert("Categoria apagada por completo!");
         currentView = 'categories';
@@ -924,14 +931,14 @@ async function deletarCategoriaCompleta(cat) {
 }
 
 function saveState() {
-    // Mantido por compatibilidade com backups JSON ou reordenações
     const dadosSalvar = database.map(({idFirebase, ...rest}) => rest);
-    const baseUrl = CONFIG.FIREBASE_URL.substring(0, CONFIG.FIREBASE_URL.lastIndexOf('/'));
-    
-    fetch(`${baseUrl}/midias.json`, { method: 'PUT', body: JSON.stringify(dadosSalvar) })
+    fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(dadosSalvar) })
         .then(() => recarregarDadosDoBanco());
 }
 
+// ==========================================
+// OUTRAS CONFIGURAÇÕES DE INTERFACE
+// ==========================================
 function downloadJSON(obj, filename) {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
     const a = document.createElement('a');
@@ -962,9 +969,6 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
     if (targetTab) targetTab.classList.remove('hidden');
 }
 
-// ==========================================
-// 9. CONFIGURAÇÃO DOS GATILHOS DA INTERFACE
-// ==========================================
 function setupEventListeners() {
     const searchYtInput = document.getElementById('search-yt-input');
     if (searchYtInput) searchYtInput.onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
