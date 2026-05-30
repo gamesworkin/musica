@@ -35,18 +35,28 @@
             <div class="header-left">
                 <button id="toggle-sidebar" class="btn-icon" title="Menu"><i class="fas fa-bars"></i></button>
                 <h1 id="bc-root" class="brand-title"><i class="fas fa-play-circle"></i> StreamHub</h1>
+                <button id="btn-toggle-search-mobile" class="btn-icon btn-mobile-only" title="Buscar"><i class="fas fa-search"></i></button>
             </div>
+            
             <div class="header-center">
                 <div class="search-bar">
                     <i class="fas fa-search"></i>
                     <input type="text" id="search-yt-input" placeholder="Buscar vídeos globais no YouTube...">
                 </div>
             </div>
+            
             <div class="header-right">
                 <button id="btn-open-admin" class="btn-admin" title="Painel de Controle"><i class="fas fa-cog"></i> Admin</button>
                 <button id="btn-logout" class="btn-logout" title="Sair"><i class="fas fa-sign-out-alt"></i> Sair</button>
             </div>
         </header>
+
+        <div id="mobile-search-row" class="mobile-search-container hidden">
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="search-yt-input-mobile" placeholder="Buscar vídeos no YouTube...">
+            </div>
+        </div>
 
         <div class="content-body">
             <aside id="sidebar" class="sidebar-panel">
@@ -99,13 +109,13 @@
             <div class="modal-body">
                 <div id="add-tab" class="tab-content">
                     <div class="form-row-inline">
-                        <input type="text" id="manual-media-url" placeholder="Cole a URL do vídeo do YouTube, MP4 ou Embed">
+                        <input type="text" id="manual-media-url" placeholder="Cole a URL do vídeo do YouTube, Playlist, MP4 ou Embed">
                         <button id="btn-fetch-manual" class="btn-secundary">Capturar Dados</button>
                     </div>
                     <div class="preview-card-box">
                         <img id="prev-thumb" src="https://placehold.co/120x90?text=Sem+Capa" alt="Capa">
                         <div class="preview-fields">
-                            <input type="text" id="prev-title" placeholder="Título capturado ou personalizado">
+                            <input type="text" id="prev-title" placeholder="Título capturado ou da playlist">
                             <div class="inline-inputs">
                                 <input type="text" id="media-category" placeholder="Nome da Categoria">
                                 <input type="text" id="media-subcategory" placeholder="Nome da Subcategoria">
