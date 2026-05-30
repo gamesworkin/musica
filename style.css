@@ -58,6 +58,11 @@ button:active {
     padding: 8px;
 }
 
+/* Oculta botões exclusivos de mobile por padrão no desktop */
+.btn-mobile-only {
+    display: none !important;
+}
+
 /* ==========================================
    1. TELA DE LOGIN & ESTILIZAÇÃO DA LOGO
    ========================================== */
@@ -79,7 +84,6 @@ button:active {
     max-width: 400px;
 }
 
-/* Centralizador da Logo 128x128 */
 .login-logo-wrapper {
     display: flex;
     justify-content: center;
@@ -162,6 +166,7 @@ button:active {
     position: relative;
     display: flex;
     align-items: center;
+    width: 100%;
 }
 .search-bar i { position: absolute; left: 12px; color: #7c7c8a; }
 .search-bar input {
@@ -171,6 +176,18 @@ button:active {
     border: 1px solid #29292e;
     border-radius: 20px;
     color: #fff;
+}
+
+/* Nova Barra de Pesquisa Expansível para Mobile */
+.mobile-search-container {
+    background: var(--bg-card);
+    padding: 10px 20px;
+    border-bottom: 1px solid #29292e;
+    position: fixed;
+    top: 60px;
+    left: 0;
+    width: 100%;
+    z-index: 99;
 }
 
 .header-right { display: flex; gap: 10px; align-items: center; }
@@ -184,6 +201,11 @@ button:active {
     flex: 1;
     margin-top: 60px;
     min-height: calc(100vh - 60px);
+}
+
+/* Caso a busca mobile esteja ativa, empurra o conteúdo um pouco mais para baixo */
+.main-wrapper:has(.mobile-search-container:not(.hidden)) .content-body {
+    margin-top: 102px; 
 }
 
 /* BARRA LATERAL (SIDEBAR) */
@@ -419,6 +441,16 @@ button:active {
    RESPONSIVIDADE MÓVEL
    ========================================== */
 @media (max-width: 768px) {
+    /* Ativa o botão de lupa apenas no mobile */
+    .btn-mobile-only {
+        display: block !important;
+    }
+    
+    /* Oculta a barra de busca original no cabeçalho */
+    .header-center { 
+        display: none !important; 
+    }
+    
     .sidebar-panel {
         position: fixed;
         top: 60px; left: 0;
@@ -430,5 +462,4 @@ button:active {
     .split-manage-layout { flex-direction: column; overflow-y: auto; }
     .tree-panel-crud { border-right: none; border-bottom: 1px solid #29292e; padding-bottom: 15px; padding-right: 0; }
     .floating-player { width: calc(100% - 40px); left: 20px; bottom: 20px; }
-    .header-center { display: none; }
 }
