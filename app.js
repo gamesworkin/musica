@@ -25,7 +25,7 @@ let expandedCrudCats = {};
 let expandedCrudSubs = {};
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO E ENTER (CORRIGIDO)
+// 1. AUTENTICAÇÃO COM SESSÃO E ENTER
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
@@ -47,7 +47,6 @@ function configurarEventosLogin() {
     const btnLogin = document.getElementById('btn-login');
 
     if (inputUser) {
-        // Remove ouvintes antigos para evitar duplicação de cliques no mobile
         const cloneUser = inputUser.cloneNode(true);
         inputUser.parentNode.replaceChild(cloneUser, inputUser);
         
@@ -95,11 +94,27 @@ function handleLogin() {
     }
 }
 
+// CORREÇÃO LOGOUT: Força a limpeza de estados locais e exibe a tela de Login limpa
 function handleLogoutActions() {
     localStorage.removeItem('streamhub_session');
-    if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e){} }
-    document.getElementById('app-container').classList.add('hidden');
+    
+    // Para a execução de players ativos
+    if (ytPlayer && typeof ytPlayer.stopVideo === 'function') { try { ytPlayer.stopVideo(); } catch(e){} }
+    const universalPlayer = document.getElementById('universal-player');
+    if (universalPlayer) universalPlayer.src = "";
+    const rawPlayer = document.getElementById('raw-player');
+    if (rawPlayer) { rawPlayer.pause(); rawPlayer.src = ""; }
+
+    // Reseta campos visuais de credenciais
+    const userField = document.getElementById('login-user');
+    const passField = document.getElementById('login-pass');
+    if (userField) userField.value = "";
+    if (passField) passField.value = "";
+
+    // Chaveia visibilidade de containers
+    const appContainer = document.getElementById('app-container');
     const loginScreen = document.getElementById('login-screen');
+    if (appContainer) appContainer.classList.add('hidden');
     if (loginScreen) loginScreen.classList.remove('hidden');
 }
 
@@ -937,6 +952,15 @@ function setupEventListeners() {
             if (rp) { rp.pause(); rp.src = ""; }
             const pContainer = document.getElementById('player-container');
             if (pContainer) pContainer.classList.add('hidden');
+        };
+    }
+
+    // GATILHO DO BOTÃO DE SAIR CORRIGIDO: Atrela diretamente o manipulador de clique
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+        btnLogout.onclick = (e) => {
+            e.preventDefault();
+            handleLogoutActions();
         };
     }
 
