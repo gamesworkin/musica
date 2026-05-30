@@ -2,13 +2,18 @@
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
 const CONFIG = {
-    ADMIN_USER: "admin",       
-    ADMIN_PASSWORD: "123",     
     YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
     FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/midias.json" 
 };
 
+// Configuração Multi-utilizador com cores padrão nativas
+const USERS_DATABASE = {
+    "admin": { password: "123", defaultColor: "#3498db" },
+    "admin2": { password: "456", defaultColor: "#e74c3c" }
+};
+
 // Estado Global da Aplicação
+let currentUser = "";
 let database = [];
 let canaisDinamicos = {};
 let currentView = 'categories'; 
@@ -41,6 +46,39 @@ function obterUrlCanalIndividual(nodeName) {
 }
 
 // ==========================================
+// MOTOR DE CORES DO TEMA DO UTILIZADOR
+// ==========================================
+function aplicarCorTema(hexColor) {
+    document.documentElement.style.setProperty('--theme-color', hexColor);
+    
+    // Calcula uma variação mais escura para o efeito Hover automaticamente
+    let num = parseInt(hexColor.replace("#",""), 16);
+    let r = (num >> 16) - 20;
+    let g = ((num >> 8) & 0x00FF) - 20;
+    let b = (num & 0x0000FF) - 20;
+    r = r < 0 ? 0 : r; g = g < 0 ? 0 : g; b = b < 0 ? 0 : b;
+    let hexHover = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    
+    document.documentElement.style.setProperty('--theme-color-hover', hexHover);
+    
+    // Atualiza o texto em formato de código na tela do seletor
+    const txtHex = document.getElementById('theme-color-hex');
+    if(txtHex) txtHex.innerText = hexColor.toUpperCase();
+}
+
+function carregarTemaDoUsuarioLogado(usuario) {
+    let corSalva = localStorage.getItem(`streamhub_theme_${usuario}`);
+    if(corSalva) {
+        aplicarCorTema(corSalva);
+        posicionarSetaPelaCor(corSalva);
+    } else {
+        let corPadrao = USERS_DATABASE[usuario] ? USERS_DATABASE[usuario].defaultColor : "#3498db";
+        aplicarCorTema(corPadrao);
+        posicionarSetaPelaCor(corPadrao);
+    }
+}
+
+// ==========================================
 // 1. AUTENTICAÇÃO COM SESSÃO E ENTER
 // ==========================================
 function checkSession() {
@@ -48,8 +86,10 @@ function checkSession() {
     if (loginData) {
         const session = JSON.parse(loginData);
         if (Date.now() - session.timestamp < 2 * 60 * 60 * 1000) {
+            currentUser = session.user;
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-container').classList.remove('hidden');
+            carregarTemaDoUsuarioLogado(currentUser);
             initApp();
             return;
         }
@@ -86,18 +126,22 @@ function configurarEventosLogin() {
 }
 
 function handleLogin() {
-    const inputUser = document.getElementById('login-user').value.trim();
+    const inputUser = document.getElementById('login-user').value.trim().toLowerCase();
     const inputPass = document.getElementById('login-pass').value.trim();
-    if (inputUser === CONFIG.ADMIN_USER && inputPass === CONFIG.ADMIN_PASSWORD) {
+    
+    if (USERS_DATABASE[inputUser] && USERS_DATABASE[inputUser].password === inputPass) {
+        currentUser = inputUser;
         localStorage.setItem('streamhub_session', JSON.stringify({ user: inputUser, timestamp: Date.now() }));
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
+        carregarTemaDoUsuarioLogado(currentUser);
         initApp();
     } else { alert("Usuário ou senha incorretos!"); }
 }
 
 function handleLogoutActions() {
     localStorage.removeItem('streamhub_session');
+    currentUser = "";
     if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e){} }
     if (document.getElementById('universal-player')) document.getElementById('universal-player').src = "";
     if (document.getElementById('raw-player')) { document.getElementById('raw-player').pause(); document.getElementById('raw-player').src = ""; }
@@ -408,13 +452,6 @@ function playTrack(index) {
     }
 }
 
-function extractYoutubeId(url) {
-    if (!url) return null; const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|\/shorts\/)([^#\&\?]*).*/; const match = url.match(regExp);
-    if (match && match[2].length === 11) return match[2];
-    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) return url.trim();
-    return null;
-}
-
 // ==========================================
 // 7. ÁRVORE GERENCIAL SANFONA (CRUD)
 // ==========================================
@@ -466,7 +503,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. CORREÇÃO E PERSISTÊNCIA DAS FERRAMENTAS JSON
+// 8. PERSISTÊNCIA EM BLOCO E PROCESSAMENTO JSON
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -522,10 +559,10 @@ async function saveMediaToDatabase(e) {
     } catch (err) { alert("Erro ao salvar."); }
 }
 
-// IMPORTAÇÃO EXCLUSIVA VIA CAIXA DE TEXTO / CAMPO DE TEXTO JSON
+// INJETOR DIRETO DA CAIXA DE TEXTO JSON
 async function importarCodigoJSON() {
     const campoTexto = document.getElementById('json-input-field');
-    if (!campoTexto || !campoTexto.value.trim()) return alert("Por favor, cole o código JSON antes de prosseguir.");
+    if (!campoTexto || !campoTexto.value.trim()) return alert("Por favor, cole o código JSON antes.");
     
     try {
         let parsed = JSON.parse(campoTexto.value.trim());
@@ -533,7 +570,7 @@ async function importarCodigoJSON() {
         if (Array.isArray(parsed)) loteValidado = parsed;
         else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
 
-        if (loteValidado.length === 0) throw new Error("A estrutura não possui mídias válidas.");
+        if (loteValidado.length === 0) throw new Error("Estrutura vazia.");
         const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
 
         if (confirm(`Aviso: Deseja importar e SOBRESCREVER o seu Firebase com estas ${loteLimpo.length} mídias?`)) {
@@ -542,13 +579,96 @@ async function importarCodigoJSON() {
                 body: JSON.stringify(loteLimpo),
                 headers: { 'Content-Type': 'application/json; charset=UTF-8' }
             });
-            if (!res.ok) throw new Error("Erro de comunicação.");
-            alert("Código JSON injetado e salvo com sucesso!");
+            if (!res.ok) throw new Error("Erro Firebase.");
+            alert("Código JSON injetado com sucesso!");
             campoTexto.value = "";
             currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
             await recarregarDadosDoBanco(); renderCrudManager();
         }
-    } catch (err) { alert("O código colado é inválido. Verifique colchetes ou aspas. Detalhes: " + err.message); }
+    } catch (err) { alert("O código colado possui erros de sintaxe. Detalhes: " + err.message); }
+}
+
+// LÓGICA DO ARRASTE DO MOUSE/TOQUE DO SELETOR DE CORES LINEAR
+function inicializarSeletorCoresLinear() {
+    const bar = document.getElementById('color-spectrum-bar');
+    const selector = document.getElementById('color-spectrum-selector');
+    if (!bar || !selector) return;
+
+    let isDragging = false;
+
+    // Array de cores correspondente ao gradiente CSS do style.css
+    const coresGradiente = [
+        "#000000", "#ff0000", "#ff00ff", "#0000ff", 
+        "#00ffff", "#00ff00", "#ffff00", "#ff0000", "#ffffff"
+    ];
+
+    function calcularCorPelaPosicao(e) {
+        const rect = bar.getBoundingClientRect();
+        let x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+        
+        // Limita o movimento dentro das bordas da barra
+        if (x < 0) x = 0;
+        if (x > rect.width) x = rect.width;
+
+        // Converte a posição X em percentagem (0% a 100%)
+        let percent = x / rect.width;
+        
+        // Posiciona a seta visualmente
+        selector.style.left = (percent * 100) + '%';
+
+        // Descobre entre quais cores do espectro a seta está passando
+        let segment = percent * (coresGradiente.length - 1);
+        let index = Math.floor(segment);
+        let factor = segment - index;
+
+        let cor1 = coresGradiente[index];
+        let cor2 = coresGradiente[index + 1] || coresGradiente[index];
+
+        // Interpolação matemática de cores RGB para gerar o tom exato
+        let rgb1 = hexToRgb(cor1);
+        let rgb2 = hexToRgb(cor2);
+
+        let r = Math.round(rgb1.r + factor * (rgb2.r - rgb1.r));
+        let g = Math.round(rgb1.g + factor * (rgb2.g - rgb1.g));
+        let b = Math.round(rgb1.b + factor * (rgb2.b - rgb1.b));
+
+        let hexResult = rgbToHex(r, g, b);
+        
+        aplicarCorTema(hexResult);
+
+        // Salva a preferência exclusiva do administrador atual logado
+        if(currentUser) {
+            localStorage.setItem(`streamhub_theme_${currentUser}`, hexResult);
+        }
+    }
+
+    // Auxiliares de conversão
+    function hexToRgb(hex) {
+        let num = parseInt(hex.replace("#",""), 16);
+        return { r: num >> 16, g: (num >> 8) & 0x00FF, b: num & 0x0000FF };
+    }
+    function rgbToHex(r, g, b) {
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    // Eventos de ativação do arraste (Suporta Mouse e Mobile Touch)
+    bar.addEventListener('mousedown', (e) => { isDragging = true; calcularCorPelaPosicao(e); });
+    document.addEventListener('mousemove', (e) => { if (isDragging) calcularCorPelaPosicao(e); });
+    document.addEventListener('mouseup', () => isDragging = false);
+
+    bar.addEventListener('touchstart', (e) => { isDragging = true; calcularCorPelaPosicao(e); }, {passive: true});
+    document.addEventListener('touchmove', (e) => { if (isDragging) calcularCorPelaPosicao(e); }, {passive: true});
+    document.addEventListener('touchend', () => isDragging = false);
+}
+
+// Reposiciona a seta visualmente no espectro quando o usuário loga
+function posicionarSetaPelaCor(hexColor) {
+    const selector = document.getElementById('color-spectrum-selector');
+    if (!selector) return;
+    
+    // Mapeamento aproximado de fallbacks visuais de inicialização
+    if(hexColor.toLowerCase() === "#3498db") selector.style.left = "33%";
+    if(hexColor.toLowerCase() === "#e74c3c") selector.style.left = "12%";
 }
 
 async function renomearCategoriaCompleta(antiga, nova) {
@@ -621,7 +741,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// 9. MAPA DE VÍNCULOS DE EVENTOS (FIXADOS)
+// 9. MAPA DE EVENTOS E LISTENERS FIXOS
 // ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
@@ -666,24 +786,34 @@ function setupEventListeners() {
     if (document.getElementById('btn-submit-edit-media')) document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
-    // FIX EXPORTAR: Ativa o clique com o ID fixado do HTML
+    // BIND EXPORTAR INTEGRAIS
     if (document.getElementById('btn-export-all-json')) {
         document.getElementById('btn-export-all-json').onclick = (e) => {
             e.preventDefault();
-            if (database.length === 0) return alert("Não há registos no banco de dados.");
+            if (database.length === 0) return alert("Banco vazio!");
             downloadJSON(database, "backup_completo_streamhub");
         };
     }
 
-    // FIX IMPORTAR TEXTO: Ativa o clique do botão injetor do código
+    // BIND INJETOR DE CÓDIGO
     if (document.getElementById('btn-submit-json-code')) {
-        document.getElementById('btn-submit-json-code').onclick = (e) => {
+        document.getElementById('btn-submit-json-code').onclick = (e) => { e.preventDefault(); importarCodigoJSON(); };
+    }
+
+    // BIND SELETOR DO BOTÃO "COR PADRÃO" RESTAURAR
+    if (document.getElementById('btn-reset-theme')) {
+        document.getElementById('btn-reset-theme').onclick = (e) => {
             e.preventDefault();
-            importarCodigoJSON();
+            if(currentUser) {
+                localStorage.removeItem(`streamhub_theme_${currentUser}`);
+                let corOriginal = USERS_DATABASE[currentUser] ? USERS_DATABASE[currentUser].defaultColor : "#3498db";
+                aplicarCorTema(corOriginal);
+                posicionarSetaPelaCor(corOriginal);
+            }
         };
     }
 
-    // FIX IMPORTAR FICHEIRO: Escuta a seleção do arquivo .json e processa o upload
+    // BIND UPLOAD DE ARQUIVO DE BACKUP .JSON
     const fileImport = document.getElementById('file-import-json');
     if (fileImport) {
         fileImport.onchange = (e) => {
@@ -697,22 +827,22 @@ function setupEventListeners() {
                     if (Array.isArray(parsed)) loteValidado = parsed;
                     else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
 
-                    if (loteValidado.length === 0) throw new Error("Ficheiro inválido.");
+                    if (loteValidado.length === 0) throw new Error("Vazio.");
                     const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
 
-                    if (confirm(`Deseja carregar estas ${loteLimpo.length} mídias? O painel atual será substituído.`)) {
+                    if (confirm(`Substituir painel atual por este arquivo contendo ${loteLimpo.length} itens?`)) {
                         let res = await fetch(CONFIG.FIREBASE_URL, {
                             method: "PUT",
                             body: JSON.stringify(loteLimpo),
                             headers: { 'Content-Type': 'application/json; charset=UTF-8' }
                         });
-                        if (!res.ok) throw new Error("Erro Firebase.");
-                        alert("Ficheiro de backup carregado e salvo com sucesso!");
+                        if (!res.ok) throw new Error("Erro.");
+                        alert("Arquivo importado e salvo com sucesso!");
                         fileImport.value = "";
                         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
                         await recarregarDadosDoBanco(); renderCrudManager();
                     }
-                } catch(err) { alert("Erro ao validar o ficheiro .json enviado: " + err.message); }
+                } catch(err) { alert("Erro de validação do arquivo: " + err.message); }
             };
             reader.readAsText(file);
         };
@@ -729,6 +859,7 @@ function setupEventListeners() {
 
     if (document.getElementById('btn-logout')) document.getElementById('btn-logout').onclick = (e) => { e.preventDefault(); handleLogoutActions(); };
     configurarEventosBuscaCanal();
+    inicializarSeletorCoresLinear();
 }
 
 // Inicialização imediata das rotinas
