@@ -408,6 +408,13 @@ function playTrack(index) {
     }
 }
 
+function extractYoutubeId(url) {
+    if (!url) return null; const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|\/shorts\/)([^#\&\?]*).*/; const match = url.match(regExp);
+    if (match && match[2].length === 11) return match[2];
+    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) return url.trim();
+    return null;
+}
+
 // ==========================================
 // 7. ÁRVORE GERENCIAL SANFONA (CRUD)
 // ==========================================
@@ -459,7 +466,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. ESCRIÇÃO EM BLOCO GLOBAL (FIXED)
+// 8. PERSISTÊNCIA EM BLOCO GLOBAL
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -479,14 +486,12 @@ async function saveAdvancedEditChanges(e) {
     
     if(!t || !l || !cat) return alert("Por favor, preencha os campos obrigatórios!");
 
-    // Injeta as modificações direto no array da memória local
     database[activeEditingIndex].título = t;
     database[activeEditingIndex].link = l;
     database[activeEditingIndex].capa = c;
     database[activeEditingIndex].categoria = cat;
     database[activeEditingIndex].subcategoria = sub;
 
-    // Remove as chaves locais para enviar um lote de Array limpo e compatível
     const loteLimpoParaSalvar = database.map(({idFirebase, ...resto}) => resto);
 
     try {
@@ -501,9 +506,7 @@ async function saveAdvancedEditChanges(e) {
         alert("Alterações gravadas e sincronizadas com sucesso!"); 
         document.getElementById('edit-media-modal').classList.add('hidden');
         
-        currentView = 'categories';
-        selectedCategory = '';
-        selectedSubcategory = '';
+        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch (err) { alert("Erro de gravação global: " + err.message); }
@@ -514,19 +517,19 @@ async function saveMediaToDatabase(e) {
     const url = document.getElementById('manual-media-url').value.trim(); const título = document.getElementById('prev-title').value.trim();
     const capa = document.getElementById('prev-thumb').src; const categoria = document.getElementById('media-category').value.trim();
     const subcategoria = document.getElementById('media-subcategory').value.trim();
-    if(!url || !título || !categoria) return alert("Preencha campos!");
+    if(!url || !título || !categoria) return alert("Preencha os campos!");
 
     try {
         await fetch(CONFIG.FIREBASE_URL, { method: 'POST', body: JSON.stringify({ título, link: url, capa, categoria, subcategoria }), headers: { 'Content-Type': 'application/json' } });
-        alert("Salvo!"); document.getElementById('manual-media-url').value = "";
+        alert("Salvo com sucesso!"); document.getElementById('manual-media-url').value = "";
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco();
-    } catch (err) { alert("Erro."); }
+    } catch (err) { alert("Erro ao salvar."); }
 }
 
 async function renomearCategoriaCompleta(antiga, nova) {
     try {
-        const alvos = database.filter(item => item.categoria === antiga);
+        const alvos = database.filter(item => item.categoria === antigua);
         for (let item of alvos) {
             item.categoria = nova; const { idFirebase, ...payload } = item;
             if (idFirebase) await fetch(obterUrlNodoItem(idFirebase), { method: "PUT", body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
@@ -593,7 +596,7 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// 9. EVENT LISTENERS GERAIS
+// 9. EVENT LISTENERS GERAIS (CORRIGIDO)
 // ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
@@ -601,21 +604,43 @@ function setupEventListeners() {
     if (document.getElementById('toggle-sidebar')) document.getElementById('toggle-sidebar').onclick = (e) => { e.preventDefault(); handleToggleSidebar(); };
     if (document.getElementById('bc-root')) document.getElementById('bc-root').onclick = () => { currentView = 'categories'; renderMosaic(); };
 
-    if (document.getElementById('btn-fetch-manual')) {
-        document.getElementById('btn-fetch-manual').onclick = async (e) => {
-            e.preventDefault(); const url = document.getElementById('manual-media-url').value.trim(); if(!url) return alert("Insira uma URL.");
-            document.getElementById('btn-fetch-manual').innerText = "Buscando..."; const vId = extractYoutubeId(url);
-            if (vId) {
-                try {
+    // CORREÇÃO: Função de captura manual com desbloqueio garantido (finally) contra travamentos eternos
+    const btnFetchManual = document.getElementById('btn-fetch-manual');
+    if (btnFetchManual) {
+        btnFetchManual.onclick = async (e) => {
+            e.preventDefault(); 
+            const url = document.getElementById('manual-media-url').value.trim(); 
+            if(!url) return alert("Insira uma URL antes de capturar dados.");
+            
+            btnFetchManual.innerText = "Buscando..."; 
+            const vId = extractYoutubeId(url);
+            
+            try {
+                if (vId) {
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${vId}&key=${CONFIG.YT_API_KEY}`);
                     const data = await res.json();
                     if (data.items && data.items.length > 0) {
-                        document.getElementById('prev-title').value = data.items[0].snippet.title;
-                        document.getElementById('prev-thumb').src = data.items[0].snippet.thumbnails.medium ? data.items[0].snippet.thumbnails.medium.url : data.items[0].snippet.thumbnails.default.url;
+                        const snip = data.items[0].snippet;
+                        document.getElementById('prev-title').value = snip.title;
+                        document.getElementById('prev-thumb').src = snip.thumbnails.medium ? snip.thumbnails.medium.url : snip.thumbnails.default.url;
+                    } else {
+                        // Caso a API do YouTube retorne vazio ou erro de cota
+                        document.getElementById('prev-title').value = "Vídeo do YouTube (Título Indisponível)";
+                        document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=YouTube";
                     }
-                } catch(err) { alert("Erro API."); }
-            } else { document.getElementById('prev-title').value = "Mídia Externa"; document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Bruto"; }
-            document.getElementById('btn-fetch-manual').innerText = "Capturar Dados";
+                } else {
+                    // Links normais, arquivos locais ou embeds genéricos
+                    document.getElementById('prev-title').value = "Mídia Externa / Arquivo Local";
+                    document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Bruto";
+                }
+            } catch(err) { 
+                // Fallback se faltar rede ou falhar a conexão
+                document.getElementById('prev-title').value = "Link Capturado";
+                document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Mídia";
+            } finally {
+                // BLINDAGEM: O botão SEMPRE volta ao estado normal aqui, evitando travamento eterno em "Buscando..."
+                btnFetchManual.innerText = "Capturar Dados";
+            }
         };
     }
 
