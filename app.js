@@ -2,7 +2,7 @@
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
 const CONFIG = {
-    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ", // SUBSTiTUA AQUI PELA SUA CHAVE ATIVADA NO GOOGLE CLOUD
+    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ", 
     FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/midias.json" 
 };
 
@@ -330,10 +330,10 @@ function configurarEventosBuscaCanal() {
                 const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(termo)}&key=${CONFIG.YT_API_KEY}`);
                 const data = await res.json(); if(!data.items || data.items.length === 0) return alert("Não localizado.");
                 const item = data.items[0];
-                canalSelecionporio = { channelId: item.snippet.channelId, title: item.snippet.title, thumb: item.snippet.thumbnails.default.url, description: item.snippet.description };
-                document.getElementById("chan-thumb").src = canalSelecionporio.thumb;
-                document.getElementById("chan-title-text").innerText = canalSelecionporio.title;
-                document.getElementById("chan-desc-text").innerText = canalSelecionporio.description;
+                canalSelecionadoProvisorio = { channelId: item.snippet.channelId, title: item.snippet.title, thumb: item.snippet.thumbnails.default.url, description: item.snippet.description };
+                document.getElementById("chan-thumb").src = canalSelecionadoProvisorio.thumb;
+                document.getElementById("chan-title-text").innerText = canalSelecionadoProvisorio.title;
+                document.getElementById("chan-desc-text").innerText = canalSelecionadoProvisorio.description;
                 document.getElementById("channel-preview").style.display = "flex";
             } catch(err) { alert("Erro API."); }
         };
@@ -341,13 +341,13 @@ function configurarEventosBuscaCanal() {
 
     if (btnSaveChanLink) {
         btnSaveChanLink.onclick = async (e) => {
-            e.preventDefault(); const catDestino = document.getElementById("channel-target-category").value; if(!canalSelecionporio || !catDestino) return alert("Selecione os dados.");
+            e.preventDefault(); const catDestino = document.getElementById("channel-target-category").value; if(!canalSelecionadoProvisorio || !catDestino) return alert("Selecione os dados.");
             try {
-                const payload = { channelId: canalSelecionporio.channelId, uploadsPlaylistId: canalSelecionporio.channelId.replace(/^UC/, "UU"), title: canalSelecionporio.title, thumb: canalSelecionporio.thumb };
+                const payload = { channelId: canalSelecionadoProvisorio.channelId, uploadsPlaylistId: canalSelecionadoProvisorio.channelId.replace(/^UC/, "UU"), title: canalSelecionadoProvisorio.title, thumb: canalSelecionadoProvisorio.thumb };
                 const nodeName = btoa(unescape(encodeURIComponent(catDestino))).replace(/=/g, "");
                 await fetch(obterUrlCanalIndividual(nodeName), { method: "PUT", body: JSON.stringify(payload) });
                 alert("Canal vinculado!"); document.getElementById("channel-preview").style.display = "none"; document.getElementById("search-channel-input").value = "";
-                canalSelecionporio = null; initApp();
+                canalSelecionadoProvisorio = null; initApp();
             } catch(err) { alert("Erro ao salvar."); }
         };
     }
@@ -395,7 +395,6 @@ function filterInternalDatabase(query) {
     });
 }
 
-// DETECTOR DE ERROS CIRÚRGICO DA API DO YOUTUBE
 async function searchYouTubeGlobal(query) {
     if(!query.trim()) return; currentView = 'search_results'; renderMosaic();
     const grid = document.getElementById('mosaic-grid'); if (grid) grid.innerHTML = '<h3>Buscando no YouTube...</h3>';
@@ -404,7 +403,6 @@ async function searchYouTubeGlobal(query) {
         const response = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=${encodeURIComponent(query)}&type=video,playlist&key=${CONFIG.YT_API_KEY}`);
         const data = await response.json();
         
-        // Verifica se a Google retornou um erro estruturado na requisição
         if (data.error) {
             console.error("Erro Google API:", data.error);
             if (grid) grid.innerHTML = `<h3 style="color:#e74c3c;">Erro do YouTube: ${data.error.message}</h3><p style="padding:10px; color:#a8a8b3;">Verifique se você ativou a 'YouTube Data API v3' e removeu as restrições de IP na sua Cloud Console.</p>`;
@@ -482,7 +480,7 @@ function extractYoutubeId(url) {
 }
 
 // ==========================================
-// 7. ÁRVORE GERENCIAL SANFONA (CRUD)
+// 7. ÁRVORE GERENCIAL SANFONA (CRUD INTEGRAL RESTABELECIDO)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list'); if (!listContainer) return; listContainer.innerHTML = '';
@@ -491,7 +489,8 @@ function renderCrudManager() {
 
     categories.sort().forEach(cat => {
         if(!cat) return;
-        const catRow = createCrudRow(cat, 'categoria', () => { let n = prompt("Novo nome:", cat); if(n && n.trim() !== "") renomearCategoriaCompleta(cat, n.trim()); }, () => { if(confirm(`Excluir ${cat}?`)) deletarCategoriaCompleta(cat); }, () => downloadJSON(database.filter(item => item.categoria === cat), `cat_${cat}`));
+        // Edição de Categoria
+        const catRow = createCrudRow(cat, 'categoria', () => { let n = prompt("Novo nome para a Categoria:", cat); if(n && n.trim() !== "") renomearCategoriaCompleta(cat, n.trim()); }, () => { if(confirm(`Excluir ${cat}?`)) deletarCategoriaCompleta(cat); }, () => downloadJSON(database.filter(item => item.categoria === cat), `cat_${cat}`));
         const subContainer = document.createElement('div'); subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
         catRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudCats[cat] = !expandedCrudCats[cat]; subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none'; });
         listContainer.appendChild(catRow);
@@ -501,7 +500,8 @@ function renderCrudManager() {
         if(canaisDinamicos[nodeName]) subcategories.push("Vídeos Recentes");
 
         subcategories.sort().forEach(sub => {
-            const subRow = createCrudRow(sub, 'subcategoria', null, () => { if(confirm(`Excluir ${sub}?`)) deletarSubcategoria(cat, sub); }, () => downloadJSON(database.filter(item => item.categoria === cat && item.subcategoria === sub), `sub_${sub}`));
+            // RESTABELECIDO: O Botão de Edição das Subcategorias agora está ativo e funcional!
+            const subRow = createCrudRow(sub, 'subcategoria', sub === "Vídeos Recentes" ? null : () => { let n = prompt("Novo nome para a Subcategoria:", sub); if(n && n.trim() !== "") renomearSubcategoriaCompleta(cat, sub, n.trim()); }, () => { if(confirm(`Excluir ${sub}?`)) deletarSubcategoria(cat, sub); }, () => downloadJSON(database.filter(item => item.categoria === cat && item.subcategoria === sub), `sub_${sub}`));
             const mediaContainer = document.createElement('div'); mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
             subRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub]; mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none'; });
             subContainer.appendChild(subRow);
@@ -521,10 +521,14 @@ function renderCrudManager() {
     });
 }
 
+// Renderiza os botões dinâmicos de controle irrestrito do CRUD
 function createCrudRow(title, type, onEdit, onDel, onExp) {
     const row = document.createElement('div'); row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'mídia' ? 'track-level' : ''}`;
     let icon = type === 'categoria' ? '<i class="fas fa-folder"></i>' : (type === 'subcategoria' ? '<i class="fas fa-video"></i>' : '<i class="fas fa-play-circle"></i>');
+    
+    // Todos os tipos que possuírem a callback 'onEdit' ativa receberão o botão gráfico de lápis na sanfona
     row.innerHTML = `<span>${icon} <strong>[${type.toUpperCase()}]</strong> ${title}</span><div class="crud-actions">${onEdit ? '<button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>' : ''}<button class="crud-btn btn-del"><i class="fas fa-trash"></i></button><button class="crud-btn btn-exp"><i class="fas fa-download"></i></button></div>`;
+    
     if(onEdit) row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
     row.querySelector('.btn-del').onclick = (e) => { e.stopPropagation(); onDel(); };
     row.querySelector('.btn-exp').onclick = (e) => { e.stopPropagation(); onExp(); };
@@ -532,7 +536,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. PERSISTÊNCIA EM BLOCO E PROCESSAMENTO JSON + DECOMPOSIÇÃO DE PLAYLIST
+// 8. PERSISTÊNCIA EM BLOCO E PROCESSO JSON + MULTI-CORES
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -568,7 +572,6 @@ async function saveAdvancedEditChanges(e) {
     } catch (err) { alert("Erro: " + err.message); }
 }
 
-// MOTOR EM LOTE: Desmembra automaticamente múltiplos vídeos de uma playlist inteira e salva um por um
 async function saveMediaToDatabase(e) {
     if(e) e.preventDefault();
     const url = document.getElementById('manual-media-url').value.trim(); 
@@ -640,7 +643,7 @@ async function importarCodigoJSON() {
     } catch (err) { alert("Erro: " + err.message); }
 }
 
-// SELETOR LINEAR MOTOR (CÁLCULO MATEMÁTICO SPECTRUM)
+// SELETOR LINEAR PHOTOSHOP MOTOR
 function inicializarSeletorCoresLinear() {
     const bar = document.getElementById('color-spectrum-bar');
     const selector = document.getElementById('color-spectrum-selector');
@@ -693,6 +696,7 @@ function posicionarSetaPelaCor(hexColor) {
     if(hexColor.toLowerCase() === "#e74c3c") selector.style.left = "12%";
 }
 
+// FUNÇÃO DE EDICAO EM LOTE: Renomeia uma categoria completa e atualiza nós associados
 async function renomearCategoriaCompleta(antiga, nova) {
     try {
         const alvos = database.filter(item => item.categoria === antiga);
@@ -706,8 +710,27 @@ async function renomearCategoriaCompleta(antiga, nova) {
             await fetch(obterUrlCanalIndividual(newNodeName), { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]), headers: { 'Content-Type': 'application/json' } });
             await fetch(obterUrlCanalIndividual(oldNodeName), { method: "DELETE" });
         }
-        await recarregarDadosDoBanco(); renderCrudManager();
-    } catch(e) { alert("Erro."); }
+        alert("Categoria renomeada com sucesso!"); await recarregarDadosDoBanco(); renderCrudManager();
+    } catch(e) { alert("Erro ao renomear categoria."); }
+}
+
+// ADICIONADO/RESTABELECIDO: Executa a alteração em lote do nome da subcategoria no Firebase
+async function renomearSubcategoriaCompleta(cat, antigaSub, novaSub) {
+    try {
+        const alvos = database.filter(item => item.categoria === cat && item.subcategoria === antigaSub);
+        if(alvos.length === 0) return alert("Nenhuma mídia encontrada nesta subcategoria.");
+        
+        for (let item of alvos) {
+            item.subcategoria = novaSub; 
+            const { idFirebase, ...payload } = item;
+            if (idFirebase) {
+                await fetch(obterUrlNodoItem(idFirebase), { method: "PUT", body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
+            }
+        }
+        alert("Subcategoria renomeada com sucesso em todas as mídias!"); 
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
+    } catch(e) { alert("Erro ao renomear subcategoria."); }
 }
 
 async function deletarMidiaUnica(item) {
