@@ -8,8 +8,8 @@ const CONFIG = {
 
 // Configuração Multi-utilizador com cores padrão nativas
 const USERS_DATABASE = {
-    "admin": { password: "123", defaultColor: "#3498db" },
-    "admin2": { password: "456", defaultColor: "#e74c3c" }
+    "diegosilvaeo": { password: "diego2154", defaultColor: "#3498db" },
+    "di.workin": { password: "arcnet2154", defaultColor: "#e74c3c" }
 };
 
 // Estado Global da Aplicação
