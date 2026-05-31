@@ -3,7 +3,7 @@
 // ==========================================
 const CONFIG = {
     YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
-    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/.json" 
+    FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/midias.json" 
 };
 
 // Configuração Multi-utilizador com cores padrão nativas
@@ -51,7 +51,6 @@ function obterUrlCanalIndividual(nodeName) {
 function aplicarCorTema(hexColor) {
     document.documentElement.style.setProperty('--theme-color', hexColor);
     
-    // Calcula uma variação mais escura para o efeito Hover automaticamente
     let num = parseInt(hexColor.replace("#",""), 16);
     let r = (num >> 16) - 20;
     let g = ((num >> 8) & 0x00FF) - 20;
@@ -61,7 +60,6 @@ function aplicarCorTema(hexColor) {
     
     document.documentElement.style.setProperty('--theme-color-hover', hexHover);
     
-    // Atualiza o texto em formato de código na tela do seletor
     const txtHex = document.getElementById('theme-color-hex');
     if(txtHex) txtHex.innerText = hexColor.toUpperCase();
 }
@@ -165,7 +163,6 @@ async function recarregarDadosDoBanco() {
         const data = await res.json();
         database = [];
         if (data) {
-            // MOTOR MISTO: Lê corretamente se os dados vieram como lista pura (Array) ou chaves dinâmicas (Objetos)
             if (Array.isArray(data)) { 
                 database = data.filter(item => item !== null); 
             } else { 
@@ -283,20 +280,6 @@ function renderMosaic() {
             card.appendChild(btnGroup); grid.appendChild(card);
         });
     }
-}
-
-function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback, realIndex = -1) {
-    const card = document.createElement('div'); card.className = 'card';
-    let htmlContent = `<img src="${imgSrc || 'https://placehold.co/160x90?text=Sem+Capa'}"><h4>${title}</h4>`;
-    if(isPlaylist) htmlContent += `<span class="media-type-badge"><i class="fas fa-photo-film"></i> Playlist</span>`;
-    if(showAddButton) htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> ${isPlaylist ? "Add Playlist" : "Adicionar"}</button>`;
-    if(realIndex >= 0) htmlContent += `<div class="quick-edit-badge" title="Editar"><i class="fas fa-cog"></i></div>`;
-    card.innerHTML = htmlContent;
-    if(clickCallback) card.addEventListener('click', clickCallback);
-    if(realIndex >= 0 && card.querySelector('.quick-edit-badge')) {
-        card.querySelector('.quick-edit-badge').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openAdvancedEditModal(realIndex); });
-    }
-    return card;
 }
 
 // ==========================================
@@ -429,94 +412,15 @@ function openAdminWithTrack(item) {
     document.getElementById('prev-thumb').src = item.thumb; document.getElementById('prev-title').value = item.title;
 }
 
-// ==========================================
-// 6. REPRODUÇÃO TRIPLA DO PLAYER
-// ==========================================
-function playTrack(index) {
-    if(currentPlaylist.length === 0) return; currentTrackIndex = index; const track = currentPlaylist[index];
-    if (document.getElementById('player-container')) document.getElementById('player-container').classList.remove('hidden');
-    if (document.getElementById('current-track-title')) document.getElementById('current-track-title').innerText = track.título;
-
-    const ytPlayerEl = document.getElementById('yt-player'); const univPlayerEl = document.getElementById('universal-player'); const rawPlayerEl = document.getElementById('raw-player');
-    if (univPlayerEl) univPlayerEl.src = ""; if (rawPlayerEl) rawPlayerEl.src = "";
-    if (univPlayerEl) univPlayerEl.classList.add('hidden'); if (rawPlayerEl) rawPlayerEl.classList.add('hidden'); if (ytPlayerEl) ytPlayerEl.classList.add('hidden');
-    if (rawPlayerEl) rawPlayerEl.pause();
-
-    const linkOriginal = track.link.trim(); const vId = extractYoutubeId(linkOriginal);
-
-    if(vId) {
-        if (ytPlayerEl) ytPlayerEl.classList.remove('hidden');
-        if (!ytPlayer) {
-            ytPlayer = new YT.Player('yt-player', { videoId: vId, playerVars: { 'autoplay': 1, 'playsinline': 1, 'enablejsapi': 1 }, events: { 'onStateChange': (e) => { if(e.data === 0 && currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); } } });
-        } else { ytPlayer.loadVideoById(vId); }
-    } 
-    else if(linkOriginal.toLowerCase().endsWith('.mp4') || linkOriginal.toLowerCase().endsWith('.mkv') || linkOriginal.toLowerCase().includes('raw.githubusercontent')) {
-        if (rawPlayerEl) { rawPlayerEl.classList.remove('hidden'); rawPlayerEl.src = linkOriginal; rawPlayerEl.play(); rawPlayerEl.onended = () => { if(currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); }; }
-    } 
-    else {
-        if (univPlayerEl) { univPlayerEl.classList.remove('hidden'); univPlayerEl.src = linkOriginal.includes("archive.org/details/") ? linkOriginal.replace("archive.org/details/", "archive.org/embed/") : linkOriginal; }
-    }
-}
-
-function extractYoutubeId(url) {
-    if (!url) return null; const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|\/shorts\/)([^#\&\?]*).*/; const match = url.match(regExp);
-    if (match && match[2].length === 11) return match[2];
-    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) return url.trim();
+function extractPlaylistId(url) {
+    const reg = /[&?]list=([^#\&\?]+)/;
+    const match = url.match(reg);
+    if (match) return match[1];
     return null;
 }
 
 // ==========================================
-// 7. ÁRVORE GERENCIAL SANFONA (CRUD)
-// ==========================================
-function renderCrudManager() {
-    const listContainer = document.getElementById('crud-tree-list'); if (!listContainer) return; listContainer.innerHTML = '';
-    const categories = [...new Set(database.map(item => item.categoria))];
-    Object.keys(canaisDinamicos).forEach(k => { try { const c = decodeURIComponent(escape(atob(k))); if(!categories.includes(c)) categories.push(c); } catch(e){} });
-
-    categories.sort().forEach(cat => {
-        if(!cat) return;
-        const catRow = createCrudRow(cat, 'categoria', () => { let n = prompt("Novo nome:", cat); if(n && n.trim() !== "") renomearCategoriaCompleta(cat, n.trim()); }, () => { if(confirm(`Excluir ${cat}?`)) deletarCategoriaCompleta(cat); }, () => downloadJSON(database.filter(item => item.categoria === cat), `cat_${cat}`));
-        const subContainer = document.createElement('div'); subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
-        catRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudCats[cat] = !expandedCrudCats[cat]; subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none'; });
-        listContainer.appendChild(catRow);
-
-        const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
-        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
-        if(canaisDinamicos[nodeName]) subcategories.push("Vídeos Recentes");
-
-        subcategories.sort().forEach(sub => {
-            const subRow = createCrudRow(sub, 'subcategoria', null, () => { if(confirm(`Excluir ${sub}?`)) deletarSubcategoria(cat, sub); }, () => downloadJSON(database.filter(item => item.categoria === cat && item.subcategoria === sub), `sub_${sub}`));
-            const mediaContainer = document.createElement('div'); mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
-            subRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub]; mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none'; });
-            subContainer.appendChild(subRow);
-
-            if(sub === "Vídeos Recentes") {
-                const iRow = document.createElement('div'); iRow.className = 'crud-item track-level'; iRow.innerHTML = `<span><i class="fas fa-link"></i> Canal: ${canaisDinamicos[nodeName].title}</span>`; mediaContainer.appendChild(iRow);
-            } else {
-                database.forEach((item, idx) => {
-                    if(item.categoria === cat && item.subcategoria === sub) {
-                        mediaContainer.appendChild(createCrudRow(item.título, 'mídia', () => openAdvancedEditModal(idx), () => { if(confirm(`Excluir?`)) deletarMidiaUnica(item); }, () => downloadJSON(item, item.título)));
-                    }
-                });
-            }
-            subContainer.appendChild(mediaContainer);
-        });
-        listContainer.appendChild(subContainer);
-    });
-}
-
-function createCrudRow(title, type, onEdit, onDel, onExp) {
-    const row = document.createElement('div'); row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'mídia' ? 'track-level' : ''}`;
-    let icon = type === 'categoria' ? '<i class="fas fa-folder"></i>' : (type === 'subcategoria' ? '<i class="fas fa-video"></i>' : '<i class="fas fa-play-circle"></i>');
-    row.innerHTML = `<span>${icon} <strong>[${type.toUpperCase()}]</strong> ${title}</span><div class="crud-actions">${onEdit ? '<button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>' : ''}<button class="crud-btn btn-del"><i class="fas fa-trash"></i></button><button class="crud-btn btn-exp"><i class="fas fa-download"></i></button></div>`;
-    if(onEdit) row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
-    row.querySelector('.btn-del').onclick = (e) => { e.stopPropagation(); onDel(); };
-    row.querySelector('.btn-exp').onclick = (e) => { e.stopPropagation(); onExp(); };
-    return row;
-}
-
-// ==========================================
-// 8. PERSISTÊNCIA EM BLOCO E PROCESSO JSON + MULTI-CORES
+// 8. PERSISTÊNCIA CORRIGIDA (SALVA PLAYLIST INTEIRA EM LOTE)
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -534,7 +438,7 @@ async function saveAdvancedEditChanges(e) {
     const cat = document.getElementById('edit-field-category').value.trim();
     const sub = document.getElementById('edit-field-subcategory').value.trim();
     
-    if(!t || !l || !cat) return alert("Por favor, preencha os campos obrigatórios!");
+    if(!t || !l || !cat) return alert("Preencha os campos!");
 
     database[activeEditingIndex].título = t;
     database[activeEditingIndex].link = l;
@@ -545,62 +449,87 @@ async function saveAdvancedEditChanges(e) {
     const loteLimpoParaSalvar = database.map(({idFirebase, ...resto}) => resto);
 
     try {
-        let resposta = await fetch(CONFIG.FIREBASE_URL, { 
-            method: "PUT", 
-            body: JSON.stringify(loteLimpoParaSalvar), 
-            headers: { 'Content-Type': 'application/json; charset=UTF-8' } 
-        });
-        if (!resposta.ok) throw new Error(`Erro HTTP: ${resposta.status}`);
-        alert("Alterações gravadas!"); document.getElementById('edit-media-modal').classList.add('hidden');
-        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
-        await recarregarDadosDoBanco(); renderCrudManager();
-    } catch (err) { alert("Erro de gravação global: " + err.message); }
+        let resposta = await fetch(CONFIG.FIREBASE_URL, { method: "PUT", body: JSON.stringify(loteLimpoParaSalvar), headers: { 'Content-Type': 'application/json' } });
+        if (!resposta.ok) throw new Error("Erro.");
+        alert("Gravado!"); document.getElementById('edit-media-modal').classList.add('hidden');
+        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco(); renderCrudManager();
+    } catch (err) { alert("Erro: " + err.message); }
 }
 
+// FIX: CAPTURA E DESMEMBRA PLAYLISTS COMPLETAS DO YT EM SEGUNDO PLANO
 async function saveMediaToDatabase(e) {
     if(e) e.preventDefault();
-    const url = document.getElementById('manual-media-url').value.trim(); const título = document.getElementById('prev-title').value.trim();
-    const capa = document.getElementById('prev-thumb').src; const categoria = document.getElementById('media-category').value.trim();
+    const url = document.getElementById('manual-media-url').value.trim(); 
+    const categoria = document.getElementById('media-category').value.trim();
     const subcategoria = document.getElementById('media-subcategory').value.trim();
-    if(!url || !título || !categoria) return alert("Preencha os campos!");
+    
+    if(!url || !categoria) return alert("Preencha a URL e a Categoria.");
+    
+    const pId = extractPlaylistId(url);
+    const btnSave = document.getElementById('btn-save-media');
 
     try {
-        await fetch(CONFIG.FIREBASE_URL, { method: 'POST', body: JSON.stringify({ título, link: url, capa, categoria, subcategoria }), headers: { 'Content-Type': 'application/json' } });
-        alert("Salvo com sucesso!"); document.getElementById('manual-media-url').value = "";
+        if(pId) {
+            // É UMA PLAYLIST! Altera o botão e busca todos os vídeos via API
+            btnSave.innerText = "Desmembrando Playlist no Firebase...";
+            btnSave.disabled = true;
+            
+            let urlApi = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${pId}&key=${CONFIG.YT_API_KEY}`;
+            let res = await fetch(urlApi);
+            let data = await res.json();
+            
+            if(!data.items || data.items.length === 0) throw new Error("Nenhum vídeo localizado nesta playlist.");
+            
+            for(let item of data.items) {
+                let vId = item.snippet.resourceId.videoId;
+                let título = item.snippet.title;
+                let capa = item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url;
+                let linkVideo = `https://www.youtube.com/embed/${vId}`;
+                
+                await fetch(CONFIG.FIREBASE_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify({ título, link: linkVideo, capa, categoria, subcategoria }), 
+                    headers: { 'Content-Type': 'application/json' } 
+                });
+            }
+            alert(`Sucesso! Foram desmembrados e salvos ${data.items.length} vídeos desta playlist.`);
+        } else {
+            // É um vídeo comum
+            const título = document.getElementById('prev-title').value.trim();
+            const capa = document.getElementById('prev-thumb').src;
+            await fetch(CONFIG.FIREBASE_URL, { method: 'POST', body: JSON.stringify({ título, link: url, capa, categoria, subcategoria }), headers: { 'Content-Type': 'application/json' } });
+            alert("Salvo com sucesso!");
+        }
+        
+        document.getElementById('manual-media-url').value = "";
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco();
-    } catch (err) { alert("Erro ao salvar."); }
+    } catch (err) { alert("Erro ao desmembrar: " + err.message); }
+    finally {
+        btnSave.innerText = "Salvar no meu Firebase";
+        btnSave.disabled = false;
+    }
 }
 
 async function importarCodigoJSON() {
     const campoTexto = document.getElementById('json-input-field');
-    if (!campoTexto || !campoTexto.value.trim()) return alert("Por favor, cole o código JSON antes.");
-    
+    if (!campoTexto || !campoTexto.value.trim()) return alert("Cole o código.");
     try {
         let parsed = JSON.parse(campoTexto.value.trim());
         let loteValidado = [];
         if (Array.isArray(parsed)) loteValidado = parsed;
         else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
-
-        if (loteValidado.length === 0) throw new Error("Estrutura vazia.");
+        if (loteValidado.length === 0) throw new Error("Vazio.");
         const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
-
-        if (confirm(`Aviso: Deseja importar e SOBRESCREVER o seu Firebase com estas ${loteLimpo.length} mídias?`)) {
-            let res = await fetch(CONFIG.FIREBASE_URL, {
-                method: "PUT",
-                body: JSON.stringify(loteLimpo),
-                headers: { 'Content-Type': 'application/json; charset=UTF-8' }
-            });
-            if (!res.ok) throw new Error("Erro Firebase.");
-            alert("Código JSON injetado com sucesso!");
-            campoTexto.value = "";
-            currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
-            await recarregarDadosDoBanco(); renderCrudManager();
+        if (confirm(`Importar ${loteLimpo.length} itens?`)) {
+            await fetch(CONFIG.FIREBASE_URL, { method: "PUT", body: JSON.stringify(loteLimpo), headers: { 'Content-Type': 'application/json' } });
+            alert("Sucesso!"); campoTexto.value = "";
+            currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco(); renderCrudManager();
         }
-    } catch (err) { alert("O código colado possui erros de sintaxe. Detalhes: " + err.message); }
+    } catch (err) { alert("Erro: " + err.message); }
 }
 
-// MOTOR DE ARRASTE DA SETA DO PHOTOSHOP (LINEAR SPECTRUM PICKER)
+// SELETOR LINEAR PHOTOSHOP MOTOR
 function inicializarSeletorCoresLinear() {
     const bar = document.getElementById('color-spectrum-bar');
     const selector = document.getElementById('color-spectrum-selector');
@@ -613,19 +542,14 @@ function inicializarSeletorCoresLinear() {
         const rect = bar.getBoundingClientRect();
         let clientX = e.clientX || (e.touches && e.touches[0].clientX);
         let x = clientX - rect.left;
-        
-        if (x < 0) x = 0;
-        if (x > rect.width) x = rect.width;
+        if (x < 0) x = 0; if (x > rect.width) x = rect.width;
 
         let percent = x / rect.width;
         selector.style.left = (percent * 100) + '%';
 
         let segment = percent * (coresGradiente.length - 1);
-        let index = Math.floor(segment);
-        let factor = segment - index;
-
-        let cor1 = coresGradiente[index];
-        let cor2 = coresGradiente[index + 1] || coresGradiente[index];
+        let index = Math.floor(segment); let factor = segment - index;
+        let cor1 = coresGradiente[index]; let cor2 = coresGradiente[index + 1] || coresGradiente[index];
 
         let rgb1 = hexToRgb(cor1); let rgb2 = hexToRgb(cor2);
         let r = Math.round(rgb1.r + factor * (rgb2.r - rgb1.r));
@@ -634,13 +558,11 @@ function inicializarSeletorCoresLinear() {
 
         let hexResult = rgbToHex(r, g, b);
         aplicarCorTema(hexResult);
-
         if(currentUser) localStorage.setItem(`streamhub_theme_${currentUser}`, hexResult);
     }
 
     function hexToRgb(hex) {
-        let num = parseInt(hex.replace("#",""), 16);
-        return { r: num >> 16, g: (num >> 8) & 0x00FF, b: num & 0x0000FF };
+        let num = parseInt(hex.replace("#",""), 16); return { r: num >> 16, g: (num >> 8) & 0x00FF, b: num & 0x0000FF };
     }
     function rgbToHex(r, g, b) {
         return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
@@ -649,15 +571,13 @@ function inicializarSeletorCoresLinear() {
     bar.addEventListener('mousedown', (e) => { isDragging = true; calcularCorPelaPosicao(e); });
     document.addEventListener('mousemove', (e) => { if (isDragging) calcularCorPelaPosicao(e); });
     document.addEventListener('mouseup', () => isDragging = false);
-
     bar.addEventListener('touchstart', (e) => { isDragging = true; calcularCorPelaPosicao(e); }, {passive: true});
     document.addEventListener('touchmove', (e) => { if (isDragging) calcularCorPelaPosicao(e); }, {passive: true});
     document.addEventListener('touchend', () => isDragging = false);
 }
 
 function posicionarSetaPelaCor(hexColor) {
-    const selector = document.getElementById('color-spectrum-selector');
-    if (!selector) return;
+    const selector = document.getElementById('color-spectrum-selector'); if (!selector) return;
     if(hexColor.toLowerCase() === "#3498db") selector.style.left = "33%";
     if(hexColor.toLowerCase() === "#e74c3c") selector.style.left = "12%";
 }
@@ -675,7 +595,7 @@ async function renomearCategoriaCompleta(antiga, nova) {
             await fetch(obterUrlCanalIndividual(newNodeName), { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]), headers: { 'Content-Type': 'application/json' } });
             await fetch(obterUrlCanalIndividual(oldNodeName), { method: "DELETE" });
         }
-        alert("Renomeado!"); await recarregarDadosDoBanco(); renderCrudManager();
+        await recarregarDadosDoBanco(); renderCrudManager();
     } catch(e) { alert("Erro."); }
 }
 
@@ -683,7 +603,7 @@ async function deletarMidiaUnica(item) {
     try {
         if(item.idFirebase) await fetch(obterUrlNodoItem(item.idFirebase), { method: 'DELETE' });
         else await fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(database.filter(i => i !== item).map(({idFirebase, ...rest}) => rest)), headers: { 'Content-Type': 'application/json' } });
-        alert("Removido!"); await recarregarDadosDoBanco(); renderCrudManager();
+        await recarregarDadosDoBanco(); renderCrudManager();
     } catch(e) { alert("Erro."); }
 }
 
@@ -694,7 +614,7 @@ async function deletarSubcategoria(cat, sub) {
             const alvos = database.filter(item => item.categoria === cat && item.subcategoria === sub);
             for(let item of alvos) { if(item.idFirebase) await fetch(obterUrlNodoItem(item.idFirebase), { method: 'DELETE' }); }
         }
-        alert("Subcategoria limpa!"); await recarregarDadosDoBanco(); renderCrudManager();
+        await recarregarDadosDoBanco(); renderCrudManager();
     } catch(e) { alert("Erro."); }
 }
 
@@ -703,12 +623,8 @@ async function deletarCategoriaCompleta(cat) {
         const alvos = database.filter(item => item.categoria === cat);
         for(let item of alvos) { if(item.idFirebase) await fetch(obterUrlNodoItem(item.idFirebase), { method: 'DELETE' }); }
         await fetch(obterUrlCanalIndividual(btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "")), { method: 'DELETE' });
-        alert("Categoria apagada!"); currentView = 'categories'; await recarregarDadosDoBanco(); renderCrudManager();
+        currentView = 'categories'; await recarregarDadosDoBanco(); renderCrudManager();
     } catch(e) { alert("Erro."); }
-}
-
-function saveState() {
-    fetch(CONFIG.FIREBASE_URL, { method: 'PUT', body: JSON.stringify(database.map(({idFirebase, ...rest}) => rest)), headers: { 'Content-Type': 'application/json' } }).then(() => recarregarDadosDoBanco());
 }
 
 function downloadJSON(obj, filename) {
@@ -732,14 +648,31 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// 9. MAPA DE EVENTOS E LINKS BREADCRUMB (FIXADO)
+// 9. MAPA DE EVENTOS E LUCO MOBILE (FIXADO)
 // ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
+    
+    // FIX MOBILE SEARCH ENTER: Aciona a busca do youtube ao apertar Enter no campo móvel
+    if (document.getElementById('search-yt-input-mobile')) {
+        document.getElementById('search-yt-input-mobile').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
+    }
+    
+    // FIX LUPA CLICÁVEL MÓVEL: Abre e fecha a linha expansível de busca
+    if (document.getElementById('btn-toggle-search-mobile')) {
+        document.getElementById('btn-toggle-search-mobile').onclick = (e) => {
+            e.preventDefault();
+            const row = document.getElementById('mobile-search-row');
+            if (row) {
+                row.classList.toggle('hidden');
+                if(!row.classList.contains('hidden')) document.getElementById('search-yt-input-mobile').focus();
+            }
+        };
+    }
+
     if (document.getElementById('search-internal-input')) document.getElementById('search-internal-input').oninput = (e) => filterInternalDatabase(e.target.value);
     if (document.getElementById('toggle-sidebar')) document.getElementById('toggle-sidebar').onclick = (e) => { e.preventDefault(); handleToggleSidebar(); };
     
-    // FIX CLIQUES DOS BREADCRUMBS
     if (document.getElementById('bc-root')) document.getElementById('bc-root').onclick = () => { currentView = 'categories'; selectedCategory=''; selectedSubcategory=''; renderMosaic(); };
     if (document.getElementById('bc-home')) document.getElementById('bc-home').onclick = () => { currentView = 'categories'; selectedCategory=''; selectedSubcategory=''; renderMosaic(); };
     if (document.getElementById('bc-category')) document.getElementById('bc-category').onclick = () => { currentView = 'subcategories'; selectedSubcategory=''; renderMosaic(); };
@@ -761,6 +694,9 @@ function setupEventListeners() {
                         document.getElementById('prev-title').value = "Vídeo do YouTube";
                         document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=YouTube";
                     }
+                } else if(extractPlaylistId(url)) {
+                    document.getElementById('prev-title').value = "Playlist Completa do YouTube (Lote Ativado)";
+                    document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Playlist+YT";
                 } else {
                     document.getElementById('prev-title').value = "Mídia Externa / Arquivo Local";
                     document.getElementById('prev-thumb').src = "https://placehold.co/120x90?text=Link+Bruto";
@@ -783,8 +719,7 @@ function setupEventListeners() {
 
     if (document.getElementById('btn-export-all-json')) {
         document.getElementById('btn-export-all-json').onclick = (e) => {
-            e.preventDefault();
-            if (database.length === 0) return alert("Banco vazio!");
+            e.preventDefault(); if (database.length === 0) return alert("Banco vazio!");
             downloadJSON(database, "backup_completo_streamhub");
         };
     }
@@ -799,7 +734,7 @@ function setupEventListeners() {
             if(currentUser) {
                 localStorage.removeItem(`streamhub_theme_${currentUser}`);
                 let corOriginal = USERS_DATABASE[currentUser] ? USERS_DATABASE[currentUser].defaultColor : "#3498db";
-                aplicarCorTema(corOriginal); posicionarSetaPelaCor(corOriginal);
+                aplicarCorTema(corOriginal); positioningSetaPelaCor(corOriginal);
             }
         };
     }
@@ -811,25 +746,18 @@ function setupEventListeners() {
             const reader = new FileReader();
             reader.onload = async (evt) => {
                 try {
-                    let parsed = JSON.parse(evt.target.result);
-                    let loteValidado = [];
+                    let parsed = JSON.parse(evt.target.result); let loteValidado = [];
                     if (Array.isArray(parsed)) loteValidado = parsed;
                     else if (typeof parsed === 'object') Object.keys(parsed).forEach(k => { if(parsed[k]) loteValidado.push(parsed[k]); });
-
                     if (loteValidado.length === 0) throw new Error("Vazio.");
                     const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
 
                     if (confirm(`Substituir painel atual por este arquivo contendo ${loteLimpo.length} itens?`)) {
-                        let res = await fetch(CONFIG.FIREBASE_URL, {
-                            method: "PUT", body: JSON.stringify(loteLimpo), headers: { 'Content-Type': 'application/json; charset=UTF-8' }
-                        });
-                        if (!res.ok) throw new Error("Erro.");
-                        alert("Arquivo importado e salvo com sucesso!");
-                        fileImport.value = "";
-                        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
-                        await recarregarDadosDoBanco(); renderCrudManager();
+                        await fetch(CONFIG.FIREBASE_URL, { method: "PUT", body: JSON.stringify(loteLimpo), headers: { 'Content-Type': 'application/json' } });
+                        alert("Sucesso!"); fileImport.value = "";
+                        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco(); renderCrudManager();
                     }
-                } catch(err) { alert("Erro de validação do arquivo: " + err.message); }
+                } catch(err) { alert("Erro: " + err.message); }
             };
             reader.readAsText(file);
         };
