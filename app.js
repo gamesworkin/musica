@@ -405,7 +405,7 @@ async function searchYouTubeGlobal(query) {
         
         if (data.error) {
             console.error("Erro Google API:", data.error);
-            if (grid) grid.innerHTML = `<h3 style="color:#e74c3c;">Erro do YouTube: ${data.error.message}</h3><p style="padding:10px; color:#a8a8b3;">Verifique se você ativou a 'YouTube Data API v3' e removeu as restrições de IP na sua Cloud Console.</p>`;
+            if (grid) grid.innerHTML = `<h3 style="color:#e74c3c;">Erro do YouTube: ${data.error.message}</h3><p style="padding:10px; color:#a8a8b3;">Verifique as configurações na sua Cloud Console.</p>`;
             return;
         }
 
@@ -480,7 +480,7 @@ function extractYoutubeId(url) {
 }
 
 // ==========================================
-// 7. ÁRVORE GERENCIAL SANFONA (CRUD INTEGRAL RESTABELECIDO)
+// 7. ÁRVORE GERENCIAL SANFONA (CRUD COMPLETO)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list'); if (!listContainer) return; listContainer.innerHTML = '';
@@ -489,7 +489,8 @@ function renderCrudManager() {
 
     categories.sort().forEach(cat => {
         if(!cat) return;
-        // Edição de Categoria
+        
+        // 1. Linha da Categoria (Sempre Editável)
         const catRow = createCrudRow(cat, 'categoria', () => { let n = prompt("Novo nome para a Categoria:", cat); if(n && n.trim() !== "") renomearCategoriaCompleta(cat, n.trim()); }, () => { if(confirm(`Excluir ${cat}?`)) deletarCategoriaCompleta(cat); }, () => downloadJSON(database.filter(item => item.categoria === cat), `cat_${cat}`));
         const subContainer = document.createElement('div'); subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
         catRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudCats[cat] = !expandedCrudCats[cat]; subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none'; });
@@ -500,7 +501,7 @@ function renderCrudManager() {
         if(canaisDinamicos[nodeName]) subcategories.push("Vídeos Recentes");
 
         subcategories.sort().forEach(sub => {
-            // RESTABELECIDO: O Botão de Edição das Subcategorias agora está ativo e funcional!
+            // CORREÇÃO VISUAL: Se NÃO for canal dinâmico ("Vídeos Recentes"), injeta a função de edição. O botão irá aparecer imediatamente!
             const subRow = createCrudRow(sub, 'subcategoria', sub === "Vídeos Recentes" ? null : () => { let n = prompt("Novo nome para a Subcategoria:", sub); if(n && n.trim() !== "") renomearSubcategoriaCompleta(cat, sub, n.trim()); }, () => { if(confirm(`Excluir ${sub}?`)) deletarSubcategoria(cat, sub); }, () => downloadJSON(database.filter(item => item.categoria === cat && item.subcategoria === sub), `sub_${sub}`));
             const mediaContainer = document.createElement('div'); mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
             subRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub]; mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none'; });
@@ -521,12 +522,11 @@ function renderCrudManager() {
     });
 }
 
-// Renderiza os botões dinâmicos de controle irrestrito do CRUD
+// Injeta cirurgicamente as ações. Se 'onEdit' existir, renderiza o botão na interface gráfica.
 function createCrudRow(title, type, onEdit, onDel, onExp) {
     const row = document.createElement('div'); row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'mídia' ? 'track-level' : ''}`;
     let icon = type === 'categoria' ? '<i class="fas fa-folder"></i>' : (type === 'subcategoria' ? '<i class="fas fa-video"></i>' : '<i class="fas fa-play-circle"></i>');
     
-    // Todos os tipos que possuírem a callback 'onEdit' ativa receberão o botão gráfico de lápis na sanfona
     row.innerHTML = `<span>${icon} <strong>[${type.toUpperCase()}]</strong> ${title}</span><div class="crud-actions">${onEdit ? '<button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>' : ''}<button class="crud-btn btn-del"><i class="fas fa-trash"></i></button><button class="crud-btn btn-exp"><i class="fas fa-download"></i></button></div>`;
     
     if(onEdit) row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
@@ -536,7 +536,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. PERSISTÊNCIA EM BLOCO E PROCESSO JSON + MULTI-CORES
+// 8. PERSISTÊNCIA EM BLOCO E PROCESSO JSON
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -578,7 +578,7 @@ async function saveMediaToDatabase(e) {
     const categoria = document.getElementById('media-category').value.trim();
     const subcategoria = document.getElementById('media-subcategory').value.trim();
     
-    if(!url || !categoria) return alert("Preencha a URL e a Categoria obrigatória.");
+    if(!url || !categoria) return alert("Preencha a URL e a Categoria.");
     
     const pId = extractPlaylistId(url);
     const btnSave = document.getElementById('btn-save-media');
@@ -593,7 +593,7 @@ async function saveMediaToDatabase(e) {
             let data = await res.json();
             
             if(data.error) throw new Error(data.error.message);
-            if(!data.items || data.items.length === 0) throw new Error("Nenhum vídeo localizado nesta playlist.");
+            if(!data.items || data.items.length === 0) throw new Error("Playlist vazia.");
             
             for(let item of data.items) {
                 let vId = item.snippet.resourceId.videoId;
@@ -607,18 +607,18 @@ async function saveMediaToDatabase(e) {
                     headers: { 'Content-Type': 'application/json' } 
                 });
             }
-            alert(`Sucesso! Foram importados e injetados ${data.items.length} vídeos desta playlist.`);
+            alert(`Sucesso! Foram importados ${data.items.length} vídeos.`);
         } else {
             const título = document.getElementById('prev-title').value.trim();
             const capa = document.getElementById('prev-thumb').src;
             await fetch(CONFIG.FIREBASE_URL, { method: 'POST', body: JSON.stringify({ título, link: url, capa, categoria, subcategoria }), headers: { 'Content-Type': 'application/json' } });
-            alert("Vídeo único salvo com sucesso!");
+            alert("Vídeo salvo!");
         }
         
         document.getElementById('manual-media-url').value = "";
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco();
-    } catch (err) { alert("Erro de importação: " + err.message); }
+    } catch (err) { alert("Erro: " + err.message); }
     finally {
         btnSave.innerText = "Salvar no meu Firebase";
         btnSave.disabled = false;
@@ -643,7 +643,7 @@ async function importarCodigoJSON() {
     } catch (err) { alert("Erro: " + err.message); }
 }
 
-// SELETOR LINEAR PHOTOSHOP MOTOR
+// SELETOR LINEAR MOTOR
 function inicializarSeletorCoresLinear() {
     const bar = document.getElementById('color-spectrum-bar');
     const selector = document.getElementById('color-spectrum-selector');
@@ -696,7 +696,6 @@ function posicionarSetaPelaCor(hexColor) {
     if(hexColor.toLowerCase() === "#e74c3c") selector.style.left = "12%";
 }
 
-// FUNÇÃO DE EDICAO EM LOTE: Renomeia uma categoria completa e atualiza nós associados
 async function renomearCategoriaCompleta(antiga, nova) {
     try {
         const alvos = database.filter(item => item.categoria === antiga);
@@ -710,15 +709,15 @@ async function renomearCategoriaCompleta(antiga, nova) {
             await fetch(obterUrlCanalIndividual(newNodeName), { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]), headers: { 'Content-Type': 'application/json' } });
             await fetch(obterUrlCanalIndividual(oldNodeName), { method: "DELETE" });
         }
-        alert("Categoria renomeada com sucesso!"); await recarregarDadosDoBanco(); renderCrudManager();
-    } catch(e) { alert("Erro ao renomear categoria."); }
+        await recarregarDadosDoBanco(); renderCrudManager();
+    } catch(e) { alert("Erro."); }
 }
 
-// ADICIONADO/RESTABELECIDO: Executa a alteração em lote do nome da subcategoria no Firebase
+// MOTOR EM LOTE: Altera o nome da subcategoria de todas as mídias afetadas de uma vez só no Firebase
 async function renomearSubcategoriaCompleta(cat, antigaSub, novaSub) {
     try {
         const alvos = database.filter(item => item.categoria === cat && item.subcategoria === antigaSub);
-        if(alvos.length === 0) return alert("Nenhuma mídia encontrada nesta subcategoria.");
+        if(alvos.length === 0) return alert("Nenhuma mídia localizada nesta subcategoria.");
         
         for (let item of alvos) {
             item.subcategoria = novaSub; 
@@ -727,7 +726,7 @@ async function renomearSubcategoriaCompleta(cat, antigaSub, novaSub) {
                 await fetch(obterUrlNodoItem(idFirebase), { method: "PUT", body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
             }
         }
-        alert("Subcategoria renomeada com sucesso em todas as mídias!"); 
+        alert("Subcategoria renomeada com sucesso!"); 
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao renomear subcategoria."); }
@@ -884,7 +883,7 @@ function setupEventListeners() {
                     if (loteValidado.length === 0) throw new Error("Vazio.");
                     const loteLimpo = loteValidado.map(({idFirebase, ...resto}) => resto);
 
-                    if (confirm(`Substituir painel atual por este arquivo contendo ${loteLimpo.length} itens?`)) {
+                    if (confirm(`Substituir painel?`)) {
                         await fetch(CONFIG.FIREBASE_URL, { method: "PUT", body: JSON.stringify(loteLimpo), headers: { 'Content-Type': 'application/json' } });
                         alert("Sucesso!"); fileImport.value = "";
                         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco(); renderCrudManager();
