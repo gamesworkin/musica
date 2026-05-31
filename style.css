@@ -269,37 +269,39 @@ button:active {
 .search-btn-group button { flex: 1; padding: 6px; font-size: 0.8rem; color: #fff; }
 
 /* ==========================================
-   4. REPRODUTOR DE MÍDIA INTEGRAL ULTRA RESPONSIVO (16:9)
+   4. REPRODUTOR DESKTOP CENTRALIZADO (65% DA TELA, CINEMATOGRÁFICO)
    ========================================== */
 .floating-player {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 420px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Centraliza milimetricamente no meio do monitor */
+    width: 65vw; /* Ocupa exatamente 65% do tamanho horizontal da janela */
+    max-width: 1100px; /* Impede distorções excessivas em monitores muito largos */
+    min-width: 500px; /* Garante usabilidade mínima em telas menores de desktop */
     background: var(--bg-card);
     border: 1px solid #29292e;
     border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.85); /* Sombra densa para destacar o player do fundo */
     z-index: 200;
     overflow: hidden;
-    transition: width 0.3s ease;
 }
 
 .player-header { 
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
-    padding: 12px; 
+    padding: 14px 18px; 
     background: var(--bg-sidebar); 
     border-bottom: 1px solid #29292e; 
 }
-.player-header h3 { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
-.btn-icon-close { background: transparent; color: #e74c3c; font-size: 1.1rem; }
+.player-header h3 { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%; }
+.btn-icon-close { background: transparent; color: #e74c3c; font-size: 1.2rem; }
 
 .player-content { 
     position: relative;
     width: 100%; 
-    padding-top: 56.25%; 
+    padding-top: 56.25%; /* Preserva a proporção nativa de cinema 16:9 */
     background: #000; 
 }
 
@@ -393,7 +395,7 @@ button:active {
 .btn-success { background: #2ecc71; }
 
 /* ==========================================
-   CORREÇÃO DO GRADIENTE DO SELETOR DE CORES LINEAR
+   ESTILOS DO SELETOR DE CORES LINEAR
    ========================================== */
 .theme-picker-box {
     background: #1a1a1e !important;
@@ -405,7 +407,6 @@ button:active {
     width: 100%;
 }
 
-/* FIX DEFINITIVO DO BACKGROUND GRADIENT */
 .color-spectrum-bar {
     width: 100%;
     height: 22px;
@@ -414,15 +415,7 @@ button:active {
     position: relative;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
     background: linear-gradient(to right, 
-        #000000 0%, 
-        #ff0000 12.5%, 
-        #ff00ff 25%, 
-        #0000ff 37.5%, 
-        #00ffff 50%, 
-        #00ff00 62.5%, 
-        #ffff00 75%, 
-        #ff0000 87.5%, 
-        #ffffff 100%
+        #000000 0%, #ff0000 12.5%, #ff00ff 25%, #0000ff 37.5%, #00ffff 50%, #00ff00 62.5%, #ffff00 75%, #ff0000 87.5%, #ffffff 100%
     ) !important;
 }
 
@@ -461,7 +454,7 @@ button:active {
 }
 
 /* ==========================================
-   RESPONSIVIDADE MÓVEL AVANÇADA
+   RESPONSIVIDADE MÓVEL AVANÇADA (PLAYER RE-ACOMODADO)
    ========================================== */
 @media (max-width: 768px) {
     .btn-mobile-only {
@@ -483,10 +476,13 @@ button:active {
     .split-manage-layout { flex-direction: column; overflow-y: auto; }
     .tree-panel-crud { border-right: none; border-bottom: 1px solid #29292e; padding-bottom: 15px; padding-right: 0; }
     
+    /* RE-ACOMODAÇÃO EXCLUSIVA PARA DISPOSITIVOS MÓVEIS (DENTRO DO IPAD/MOBILE) */
     .floating-player { 
         width: calc(100% - 20px) !important; 
         left: 10px !important; 
         bottom: 10px !important; 
+        top: auto !important; /* Desativa a centralização vertical do desktop */
+        transform: none !important; /* Limpa o cálculo de translação do desktop */
     }
     .player-header h3 { max-width: 200px; }
 }
