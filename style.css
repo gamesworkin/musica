@@ -58,7 +58,6 @@ button:active {
     padding: 8px;
 }
 
-/* Oculta botões exclusivos de mobile por padrão no desktop */
 .btn-mobile-only {
     display: none !important;
 }
@@ -178,7 +177,6 @@ button:active {
     color: #fff;
 }
 
-/* Nova Barra de Pesquisa Expansível para Mobile */
 .mobile-search-container {
     background: var(--bg-card);
     padding: 10px 20px;
@@ -203,7 +201,6 @@ button:active {
     min-height: calc(100vh - 60px);
 }
 
-/* Caso a busca mobile esteja ativa, empurra o conteúdo um pouco mais para baixo */
 .main-wrapper:has(.mobile-search-container:not(.hidden)) .content-body {
     margin-top: 102px; 
 }
@@ -272,25 +269,52 @@ button:active {
 .search-btn-group button { flex: 1; padding: 6px; font-size: 0.8rem; color: #fff; }
 
 /* ==========================================
-   4. PLAYER FLUTUANTE
+   4. REPRODUTOR DE MÍDIA INTEGRAL ULTRA RESPONSIVO (16:9)
    ========================================== */
 .floating-player {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    width: 360px;
+    width: 420px;
     background: var(--bg-card);
     border: 1px solid #29292e;
     border-radius: 8px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     z-index: 200;
     overflow: hidden;
+    transition: width 0.3s ease;
 }
 
-.player-header { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--bg-sidebar); border-bottom: 1px solid #29292e; }
-.player-header h3 { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.player-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 12px; 
+    background: var(--bg-sidebar); 
+    border-bottom: 1px solid #29292e; 
+}
+.player-header h3 { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
 .btn-icon-close { background: transparent; color: #e74c3c; font-size: 1.1rem; }
-.player-content { width: 100%; aspect-ratio: 16/9; background: #000; }
+
+/* Arquitetura Elástica Responsiva Dinâmica */
+.player-content { 
+    position: relative;
+    width: 100%; 
+    padding-top: 56.25%; /* Entrega matemática exata da proporção 16:9 */
+    background: #000; 
+}
+
+/* Força os 3 motores internos (YT, Iframe Universal e Vídeo Raw) a obedecerem à proporção elástica */
+.player-content #yt-player,
+.player-content #universal-player,
+.player-content #raw-player {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    border: none;
+}
 
 /* ==========================================
    5. MODAIS ADMINISTRATIVOS
@@ -391,15 +415,7 @@ button:active {
     position: relative;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
     background: linear-gradient(to right, 
-        #000000 0%, 
-        #ff0000 12.5%, 
-        #ff00ff 25%, 
-        #0000ff 37.5%, 
-        #00ffff 50%, 
-        #00ff00 62.5%, 
-        #ffff00 75%, 
-        #ff0000 87.5%, 
-        #ffffff 100%
+        #000000 0%, #ff0000 12.5%, #ff00ff 25%, #0000ff 37.5%, #00ffff 50%, #00ff00 62.5%, #ffff00 75%, #ff0000 87.5%, #ffffff 100__
     );
 }
 
@@ -438,15 +454,13 @@ button:active {
 }
 
 /* ==========================================
-   RESPONSIVIDADE MÓVEL
+   RESPONSIVIDADE MÓVEL AVANÇADA
    ========================================== */
 @media (max-width: 768px) {
-    /* Ativa o botão de lupa apenas no mobile */
     .btn-mobile-only {
         display: block !important;
     }
     
-    /* Oculta a barra de busca original no cabeçalho */
     .header-center { 
         display: none !important; 
     }
@@ -461,5 +475,12 @@ button:active {
     .sidebar-panel.open { transform: translateX(0); width: 260px; }
     .split-manage-layout { flex-direction: column; overflow-y: auto; }
     .tree-panel-crud { border-right: none; border-bottom: 1px solid #29292e; padding-bottom: 15px; padding-right: 0; }
-    .floating-player { width: calc(100% - 40px); left: 20px; bottom: 20px; }
+    
+    /* ADEQUAÇÃO AUTOMÁTICA DO PLAYER NO MOBILE */
+    .floating-player { 
+        width: calc(100% - 20px) !important; /* Estica até a borda respeitando margem de segurança */
+        left: 10px !important; 
+        bottom: 10px !important; 
+    }
+    .player-header h3 { max-width: 200px; }
 }
