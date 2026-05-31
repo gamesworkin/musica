@@ -2,7 +2,7 @@
 // CONFIGURAÇÕES GERAIS E KEYS
 // ==========================================
 const CONFIG = {
-    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ",
+    YT_API_KEY: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ", // SUBSTiTUA AQUI PELA SUA CHAVE ATIVADA NO GOOGLE CLOUD
     FIREBASE_URL: "https://workin--music-default-rtdb.firebaseio.com/midias.json" 
 };
 
@@ -282,6 +282,20 @@ function renderMosaic() {
     }
 }
 
+function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, clickCallback, realIndex = -1) {
+    const card = document.createElement('div'); card.className = 'card';
+    let htmlContent = `<img src="${imgSrc || 'https://placehold.co/160x90?text=Sem+Capa'}"><h4>${title}</h4>`;
+    if(isPlaylist) htmlContent += `<span class="media-type-badge"><i class="fas fa-photo-film"></i> Playlist</span>`;
+    if(showAddButton) htmlContent += `<button class="add-music-badge"><i class="fas fa-plus"></i> ${isPlaylist ? "Add Playlist" : "Adicionar"}</button>`;
+    if(realIndex >= 0) htmlContent += `<div class="quick-edit-badge" title="Editar"><i class="fas fa-cog"></i></div>`;
+    card.innerHTML = htmlContent;
+    if(clickCallback) card.addEventListener('click', clickCallback);
+    if(realIndex >= 0 && card.querySelector('.quick-edit-badge')) {
+        card.querySelector('.quick-edit-badge').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openAdvancedEditModal(realIndex); });
+    }
+    return card;
+}
+
 // ==========================================
 // 4. API DE CANAIS DINÂMICOS
 // ==========================================
@@ -316,10 +330,10 @@ function configurarEventosBuscaCanal() {
                 const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(termo)}&key=${CONFIG.YT_API_KEY}`);
                 const data = await res.json(); if(!data.items || data.items.length === 0) return alert("Não localizado.");
                 const item = data.items[0];
-                canalSelecionadoProvisorio = { channelId: item.snippet.channelId, title: item.snippet.title, thumb: item.snippet.thumbnails.default.url, description: item.snippet.description };
-                document.getElementById("chan-thumb").src = canalSelecionadoProvisorio.thumb;
-                document.getElementById("chan-title-text").innerText = canalSelecionadoProvisorio.title;
-                document.getElementById("chan-desc-text").innerText = canalSelecionadoProvisorio.description;
+                canalSelecionporio = { channelId: item.snippet.channelId, title: item.snippet.title, thumb: item.snippet.thumbnails.default.url, description: item.snippet.description };
+                document.getElementById("chan-thumb").src = canalSelecionporio.thumb;
+                document.getElementById("chan-title-text").innerText = canalSelecionporio.title;
+                document.getElementById("chan-desc-text").innerText = canalSelecionporio.description;
                 document.getElementById("channel-preview").style.display = "flex";
             } catch(err) { alert("Erro API."); }
         };
@@ -327,13 +341,13 @@ function configurarEventosBuscaCanal() {
 
     if (btnSaveChanLink) {
         btnSaveChanLink.onclick = async (e) => {
-            e.preventDefault(); const catDestino = document.getElementById("channel-target-category").value; if(!canalSelecionadoProvisorio || !catDestino) return alert("Selecione os dados.");
+            e.preventDefault(); const catDestino = document.getElementById("channel-target-category").value; if(!canalSelecionporio || !catDestino) return alert("Selecione os dados.");
             try {
-                const payload = { channelId: canalSelecionadoProvisorio.channelId, uploadsPlaylistId: canalSelecionadoProvisorio.channelId.replace(/^UC/, "UU"), title: canalSelecionadoProvisorio.title, thumb: canalSelecionadoProvisorio.thumb };
+                const payload = { channelId: canalSelecionporio.channelId, uploadsPlaylistId: canalSelecionporio.channelId.replace(/^UC/, "UU"), title: canalSelecionporio.title, thumb: canalSelecionporio.thumb };
                 const nodeName = btoa(unescape(encodeURIComponent(catDestino))).replace(/=/g, "");
                 await fetch(obterUrlCanalIndividual(nodeName), { method: "PUT", body: JSON.stringify(payload) });
                 alert("Canal vinculado!"); document.getElementById("channel-preview").style.display = "none"; document.getElementById("search-channel-input").value = "";
-                canalSelecionadoProvisorio = null; initApp();
+                canalSelecionporio = null; initApp();
             } catch(err) { alert("Erro ao salvar."); }
         };
     }
@@ -381,12 +395,23 @@ function filterInternalDatabase(query) {
     });
 }
 
+// DETECTOR DE ERROS CIRÚRGICO DA API DO YOUTUBE
 async function searchYouTubeGlobal(query) {
     if(!query.trim()) return; currentView = 'search_results'; renderMosaic();
     const grid = document.getElementById('mosaic-grid'); if (grid) grid.innerHTML = '<h3>Buscando no YouTube...</h3>';
+    
     try {
         const response = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=${encodeURIComponent(query)}&type=video,playlist&key=${CONFIG.YT_API_KEY}`);
-        const data = await response.json(); lastYtSearchResults = [];
+        const data = await response.json();
+        
+        // Verifica se a Google retornou um erro estruturado na requisição
+        if (data.error) {
+            console.error("Erro Google API:", data.error);
+            if (grid) grid.innerHTML = `<h3 style="color:#e74c3c;">Erro do YouTube: ${data.error.message}</h3><p style="padding:10px; color:#a8a8b3;">Verifique se você ativou a 'YouTube Data API v3' e removeu as restrições de IP na sua Cloud Console.</p>`;
+            return;
+        }
+
+        lastYtSearchResults = [];
         if(data.items) {
             data.items.forEach(item => {
                 const isPl = item.id.kind === 'youtube#playlist';
@@ -394,7 +419,9 @@ async function searchYouTubeGlobal(query) {
             });
         }
         renderMosaic();
-    } catch (e) { if (grid) grid.innerHTML = '<h3>Erro na busca.</h3>'; }
+    } catch (e) { 
+        if (grid) grid.innerHTML = '<h3>Erro de rede ao conectar à API.</h3>'; 
+    }
 }
 
 async function peekPlaylistContents(playlistId) {
@@ -415,12 +442,97 @@ function openAdminWithTrack(item) {
 function extractPlaylistId(url) {
     const reg = /[&?]list=([^#\&\?]+)/;
     const match = url.match(reg);
-    if (match) return match[1];
+    return match ? match[1] : null;
+}
+
+// ==========================================
+// 6. REPRODUÇÃO TRIPLA DO PLAYER
+// ==========================================
+function playTrack(index) {
+    if(currentPlaylist.length === 0) return; currentTrackIndex = index; const track = currentPlaylist[index];
+    if (document.getElementById('player-container')) document.getElementById('player-container').classList.remove('hidden');
+    if (document.getElementById('current-track-title')) document.getElementById('current-track-title').innerText = track.título;
+
+    const ytPlayerEl = document.getElementById('yt-player'); const univPlayerEl = document.getElementById('universal-player'); const rawPlayerEl = document.getElementById('raw-player');
+    if (univPlayerEl) univPlayerEl.src = ""; if (rawPlayerEl) rawPlayerEl.src = "";
+    if (univPlayerEl) univPlayerEl.classList.add('hidden'); if (rawPlayerEl) rawPlayerEl.classList.add('hidden'); if (ytPlayerEl) ytPlayerEl.classList.add('hidden');
+    if (rawPlayerEl) rawPlayerEl.pause();
+
+    const linkOriginal = track.link.trim(); const vId = extractYoutubeId(linkOriginal);
+
+    if(vId) {
+        if (ytPlayerEl) ytPlayerEl.classList.remove('hidden');
+        if (!ytPlayer) {
+            ytPlayer = new YT.Player('yt-player', { videoId: vId, playerVars: { 'autoplay': 1, 'playsinline': 1, 'enablejsapi': 1 }, events: { 'onStateChange': (e) => { if(e.data === 0 && currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); } } });
+        } else { ytPlayer.loadVideoById(vId); }
+    } 
+    else if(linkOriginal.toLowerCase().endsWith('.mp4') || linkOriginal.toLowerCase().endsWith('.mkv') || linkOriginal.toLowerCase().includes('raw.githubusercontent')) {
+        if (rawPlayerEl) { rawPlayerEl.classList.remove('hidden'); rawPlayerEl.src = linkOriginal; rawPlayerEl.play(); rawPlayerEl.onended = () => { if(currentTrackIndex + 1 < currentPlaylist.length) playTrack(currentTrackIndex + 1); }; }
+    } 
+    else {
+        if (univPlayerEl) { univPlayerEl.classList.remove('hidden'); univPlayerEl.src = linkOriginal.includes("archive.org/details/") ? linkOriginal.replace("archive.org/details/", "archive.org/embed/") : linkOriginal; }
+    }
+}
+
+function extractYoutubeId(url) {
+    if (!url) return null; const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|\/shorts\/)([^#\&\?]*).*/; const match = url.match(regExp);
+    if (match && match[2].length === 11) return match[2];
+    if (url.trim().length === 11 && !url.includes('/') && !url.includes('.')) return url.trim();
     return null;
 }
 
 // ==========================================
-// 8. PERSISTÊNCIA CORRIGIDA (SALVA PLAYLIST INTEIRA EM LOTE)
+// 7. ÁRVORE GERENCIAL SANFONA (CRUD)
+// ==========================================
+function renderCrudManager() {
+    const listContainer = document.getElementById('crud-tree-list'); if (!listContainer) return; listContainer.innerHTML = '';
+    const categories = [...new Set(database.map(item => item.categoria))];
+    Object.keys(canaisDinamicos).forEach(k => { try { const c = decodeURIComponent(escape(atob(k))); if(!categories.includes(c)) categories.push(c); } catch(e){} });
+
+    categories.sort().forEach(cat => {
+        if(!cat) return;
+        const catRow = createCrudRow(cat, 'categoria', () => { let n = prompt("Novo nome:", cat); if(n && n.trim() !== "") renomearCategoriaCompleta(cat, n.trim()); }, () => { if(confirm(`Excluir ${cat}?`)) deletarCategoriaCompleta(cat); }, () => downloadJSON(database.filter(item => item.categoria === cat), `cat_${cat}`));
+        const subContainer = document.createElement('div'); subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
+        catRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudCats[cat] = !expandedCrudCats[cat]; subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none'; });
+        listContainer.appendChild(catRow);
+
+        const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
+        const nodeName = btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "");
+        if(canaisDinamicos[nodeName]) subcategories.push("Vídeos Recentes");
+
+        subcategories.sort().forEach(sub => {
+            const subRow = createCrudRow(sub, 'subcategoria', null, () => { if(confirm(`Excluir ${sub}?`)) deletarSubcategoria(cat, sub); }, () => downloadJSON(database.filter(item => item.categoria === cat && item.subcategoria === sub), `sub_${sub}`));
+            const mediaContainer = document.createElement('div'); mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
+            subRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub]; mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none'; });
+            subContainer.appendChild(subRow);
+
+            if(sub === "Vídeos Recentes") {
+                const iRow = document.createElement('div'); iRow.className = 'crud-item track-level'; iRow.innerHTML = `<span><i class="fas fa-link"></i> Canal: ${canaisDinamicos[nodeName].title}</span>`; mediaContainer.appendChild(iRow);
+            } else {
+                database.forEach((item, idx) => {
+                    if(item.categoria === cat && item.subcategoria === sub) {
+                        mediaContainer.appendChild(createCrudRow(item.título, 'mídia', () => openAdvancedEditModal(idx), () => { if(confirm(`Excluir?`)) deletarMidiaUnica(item); }, () => downloadJSON(item, item.título)));
+                    }
+                });
+            }
+            subContainer.appendChild(mediaContainer);
+        });
+        listContainer.appendChild(subContainer);
+    });
+}
+
+function createCrudRow(title, type, onEdit, onDel, onExp) {
+    const row = document.createElement('div'); row.className = `crud-item ${type === 'subcategoria' ? 'sub-level' : type === 'mídia' ? 'track-level' : ''}`;
+    let icon = type === 'categoria' ? '<i class="fas fa-folder"></i>' : (type === 'subcategoria' ? '<i class="fas fa-video"></i>' : '<i class="fas fa-play-circle"></i>');
+    row.innerHTML = `<span>${icon} <strong>[${type.toUpperCase()}]</strong> ${title}</span><div class="crud-actions">${onEdit ? '<button class="crud-btn btn-edit"><i class="fas fa-edit"></i></button>' : ''}<button class="crud-btn btn-del"><i class="fas fa-trash"></i></button><button class="crud-btn btn-exp"><i class="fas fa-download"></i></button></div>`;
+    if(onEdit) row.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); onEdit(); };
+    row.querySelector('.btn-del').onclick = (e) => { e.stopPropagation(); onDel(); };
+    row.querySelector('.btn-exp').onclick = (e) => { e.stopPropagation(); onExp(); };
+    return row;
+}
+
+// ==========================================
+// 8. PERSISTÊNCIA EM BLOCO E PROCESSAMENTO JSON + DECOMPOSIÇÃO DE PLAYLIST
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -456,21 +568,20 @@ async function saveAdvancedEditChanges(e) {
     } catch (err) { alert("Erro: " + err.message); }
 }
 
-// FIX: CAPTURA E DESMEMBRA PLAYLISTS COMPLETAS DO YT EM SEGUNDO PLANO
+// MOTOR EM LOTE: Desmembra automaticamente múltiplos vídeos de uma playlist inteira e salva um por um
 async function saveMediaToDatabase(e) {
     if(e) e.preventDefault();
     const url = document.getElementById('manual-media-url').value.trim(); 
     const categoria = document.getElementById('media-category').value.trim();
     const subcategoria = document.getElementById('media-subcategory').value.trim();
     
-    if(!url || !categoria) return alert("Preencha a URL e a Categoria.");
+    if(!url || !categoria) return alert("Preencha a URL e a Categoria obrigatória.");
     
     const pId = extractPlaylistId(url);
     const btnSave = document.getElementById('btn-save-media');
 
     try {
         if(pId) {
-            // É UMA PLAYLIST! Altera o botão e busca todos os vídeos via API
             btnSave.innerText = "Desmembrando Playlist no Firebase...";
             btnSave.disabled = true;
             
@@ -478,6 +589,7 @@ async function saveMediaToDatabase(e) {
             let res = await fetch(urlApi);
             let data = await res.json();
             
+            if(data.error) throw new Error(data.error.message);
             if(!data.items || data.items.length === 0) throw new Error("Nenhum vídeo localizado nesta playlist.");
             
             for(let item of data.items) {
@@ -492,19 +604,18 @@ async function saveMediaToDatabase(e) {
                     headers: { 'Content-Type': 'application/json' } 
                 });
             }
-            alert(`Sucesso! Foram desmembrados e salvos ${data.items.length} vídeos desta playlist.`);
+            alert(`Sucesso! Foram importados e injetados ${data.items.length} vídeos desta playlist.`);
         } else {
-            // É um vídeo comum
             const título = document.getElementById('prev-title').value.trim();
             const capa = document.getElementById('prev-thumb').src;
             await fetch(CONFIG.FIREBASE_URL, { method: 'POST', body: JSON.stringify({ título, link: url, capa, categoria, subcategoria }), headers: { 'Content-Type': 'application/json' } });
-            alert("Salvo com sucesso!");
+            alert("Vídeo único salvo com sucesso!");
         }
         
         document.getElementById('manual-media-url').value = "";
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco();
-    } catch (err) { alert("Erro ao desmembrar: " + err.message); }
+    } catch (err) { alert("Erro de importação: " + err.message); }
     finally {
         btnSave.innerText = "Salvar no meu Firebase";
         btnSave.disabled = false;
@@ -529,7 +640,7 @@ async function importarCodigoJSON() {
     } catch (err) { alert("Erro: " + err.message); }
 }
 
-// SELETOR LINEAR PHOTOSHOP MOTOR
+// SELETOR LINEAR MOTOR (CÁLCULO MATEMÁTICO SPECTRUM)
 function inicializarSeletorCoresLinear() {
     const bar = document.getElementById('color-spectrum-bar');
     const selector = document.getElementById('color-spectrum-selector');
@@ -648,17 +759,15 @@ function switchTabs(targetTabId, activeTriggerBtnId) {
 }
 
 // ==========================================
-// 9. MAPA DE EVENTOS E LUCO MOBILE (FIXADO)
+// 9. MAPA DE EVENTOS E LUPA MOBILE
 // ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
     
-    // FIX MOBILE SEARCH ENTER: Aciona a busca do youtube ao apertar Enter no campo móvel
     if (document.getElementById('search-yt-input-mobile')) {
         document.getElementById('search-yt-input-mobile').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
     }
     
-    // FIX LUPA CLICÁVEL MÓVEL: Abre e fecha a linha expansível de busca
     if (document.getElementById('btn-toggle-search-mobile')) {
         document.getElementById('btn-toggle-search-mobile').onclick = (e) => {
             e.preventDefault();
@@ -734,7 +843,7 @@ function setupEventListeners() {
             if(currentUser) {
                 localStorage.removeItem(`streamhub_theme_${currentUser}`);
                 let corOriginal = USERS_DATABASE[currentUser] ? USERS_DATABASE[currentUser].defaultColor : "#3498db";
-                aplicarCorTema(corOriginal); positioningSetaPelaCor(corOriginal);
+                aplicarCorTema(corOriginal); posicionarSetaPelaCor(corOriginal);
             }
         };
     }
