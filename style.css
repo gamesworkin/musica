@@ -296,15 +296,13 @@ button:active {
 .player-header h3 { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
 .btn-icon-close { background: transparent; color: #e74c3c; font-size: 1.1rem; }
 
-/* Arquitetura Elástica Responsiva Dinâmica */
 .player-content { 
     position: relative;
     width: 100%; 
-    padding-top: 56.25%; /* Entrega matemática exata da proporção 16:9 */
+    padding-top: 56.25%; 
     background: #000; 
 }
 
-/* Força os 3 motores internos (YT, Iframe Universal e Vídeo Raw) a obedecerem à proporção elástica */
 .player-content #yt-player,
 .player-content #universal-player,
 .player-content #raw-player {
@@ -395,7 +393,7 @@ button:active {
 .btn-success { background: #2ecc71; }
 
 /* ==========================================
-   ESTILOS DO SELETOR DE CORES LINEAR
+   CORREÇÃO DO GRADIENTE DO SELETOR DE CORES LINEAR
    ========================================== */
 .theme-picker-box {
     background: #1a1a1e !important;
@@ -407,6 +405,7 @@ button:active {
     width: 100%;
 }
 
+/* FIX DEFINITIVO DO BACKGROUND GRADIENT */
 .color-spectrum-bar {
     width: 100%;
     height: 22px;
@@ -415,8 +414,16 @@ button:active {
     position: relative;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
     background: linear-gradient(to right, 
-        #000000 0%, #ff0000 12.5%, #ff00ff 25%, #0000ff 37.5%, #00ffff 50%, #00ff00 62.5%, #ffff00 75%, #ff0000 87.5%, #ffffff 100__
-    );
+        #000000 0%, 
+        #ff0000 12.5%, 
+        #ff00ff 25%, 
+        #0000ff 37.5%, 
+        #00ffff 50%, 
+        #00ff00 62.5%, 
+        #ffff00 75%, 
+        #ff0000 87.5%, 
+        #ffffff 100%
+    ) !important;
 }
 
 .color-spectrum-selector {
@@ -476,9 +483,8 @@ button:active {
     .split-manage-layout { flex-direction: column; overflow-y: auto; }
     .tree-panel-crud { border-right: none; border-bottom: 1px solid #29292e; padding-bottom: 15px; padding-right: 0; }
     
-    /* ADEQUAÇÃO AUTOMÁTICA DO PLAYER NO MOBILE */
     .floating-player { 
-        width: calc(100% - 20px) !important; /* Estica até a borda respeitando margem de segurança */
+        width: calc(100% - 20px) !important; 
         left: 10px !important; 
         bottom: 10px !important; 
     }
