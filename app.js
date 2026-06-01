@@ -11,7 +11,7 @@ const USERS_DATABASE = {
     "dipriv": { 
         password: "arcnet215", 
         defaultColor: "#e74c3c",
-        firebaseUrl: "https://workin--music-default-rtdb.firebaseio.com/midias.json",
+        firebaseUrl: "https://dipriv-47697-default-rtdb.firebaseio.com/.json",
         ytApiKey: "AIzaSyD2x7SjdblFqlxQdKHlgfSZA5Nmjb1QbMk"
     }
 };
@@ -515,8 +515,6 @@ async function saveAdvancedEditChanges(e) {
     try {
         await empurrarBancoIntegralParaServidor();
         document.getElementById('edit-media-modal').classList.add('hidden');
-        
-        // CORREÇÃO: Força o recarregamento imediato e o redesenho dinâmico do CRUD
         await recarregarDadosDoBanco(); 
         renderCrudManager();
         alert("Alteração salva com sucesso!");
@@ -551,8 +549,6 @@ async function saveMediaToDatabase(e) {
         }
         document.getElementById('manual-media-url').value = ""; 
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
-        
-        // CORREÇÃO: Força atualização instantânea da grade principal na tela
         await recarregarDadosDoBanco();
     } catch (err) { alert("Erro: " + err.message); } finally { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
 }
@@ -566,14 +562,13 @@ async function processarInjecaoDeDadosAcumulativa(novosItens) {
             else Object.keys(data).forEach(k => { if(data[k]) bancoAtual.push(data[k]); });
         }
         novosItens.forEach(novo => {
-            const limpo = { título: ...[novo.título], link: novo.link, capa: novo.capa || "", categoria: novo.categoria, subcategoria: novo.subcategoria || "" };
+            // CORREÇÃO DA SINTAXE DO OPERADOR SPREAD EXCLUSIVA
+            const limpo = { título: novo.título, link: novo.link, capa: novo.capa || "", categoria: novo.categoria, subcategoria: novo.subcategoria || "" };
             const jaExiste = bancoAtual.some(velho => velho.link === limpo.link && velho.categoria === limpo.categoria);
             if(!jaExiste) bancoAtual.push(limpo);
         });
         database = bancoAtual;
         await empurrarBancoIntegralParaServidor();
-        
-        // CORREÇÃO: Força sincronização após processamento acumulativo
         await recarregarDadosDoBanco(); 
         renderCrudManager();
         alert(`Importação concluída! O seu banco agora possui um total de ${database.length} mídias.`);
@@ -600,8 +595,6 @@ async function deletarMidiaUnica(indexNoBanco) {
     try {
         database.splice(indexNoBanco, 1);
         await empurrarBancoIntegralParaServidor();
-        
-        // CORREÇÃO: Recarregamento reativo síncrono para renderizar sumiço na hora
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir mídia."); }
@@ -611,8 +604,6 @@ async function deletarSubcategoria(cat, sub) {
     try {
         database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
         await empurrarBancoIntegralParaServidor();
-        
-        // CORREÇÃO: Recarregamento reativo síncrono para renderizar sumiço na hora
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir subcategoria."); }
@@ -686,15 +677,15 @@ function handleToggleSidebar() {
     else { sidebar.classList.toggle('collapsed'); sidebar.classList.remove('open'); }
 }
 
+// ==========================================
+// 9. MAPA DE EVENTOS E LUPA MOBILE
+// ==========================================
 function switchTabs(targetTabId, activeTriggerBtnId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
     const triggerBtn = document.getElementById(activeTriggerBtnId); const targetTab = document.getElementById(targetTabId);
     if (triggerBtn) triggerBtn.classList.add('active'); if (targetTab) targetTab.classList.remove('hidden');
 }
 
-// ==========================================
-// 9. MAPA DE EVENTOS E LUPA MOBILE
-// ==========================================
 function setupEventListeners() {
     if (document.getElementById('search-yt-input')) document.getElementById('search-yt-input').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); };
     if (document.getElementById('search-yt-input-mobile')) { document.getElementById('search-yt-input-mobile').onkeypress = (e) => { if(e.key === 'Enter') searchYouTubeGlobal(e.target.value); }; }
@@ -736,7 +727,6 @@ function setupEventListeners() {
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
     if (document.getElementById('btn-cancel-edit-media-2')) document.getElementById('btn-cancel-edit-media-2').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
-    // CORREÇÃO: Vinculação estável do botão de exportação geral
     if (document.getElementById('btn-export-all-json')) {
         document.getElementById('btn-export-all-json').onclick = (e) => {
             e.preventDefault(); if (database.length === 0) return alert("Banco vazio!");
@@ -788,4 +778,5 @@ function setupEventListeners() {
     configurarEventosBuscaCanal(); inicializarSeletorCoresLinear();
 }
 
+// Inicialização estável dos listeners nativos
 configurarEventosLogin(); checkSession();
