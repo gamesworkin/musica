@@ -3,206 +3,256 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workin'Hub by Di Workin'</title>
+    <title>MediaHub by Di Workin'</title>
     <link rel="icon" type="image/x-icon" href="fav.ico">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
+    <!-- FontAwesome para os Ícones do Sistema -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
+    <!-- ==========================================
+         TELA DE LOGIN INDEPENDENTE
+         ========================================== -->
     <div id="login-screen" class="login-container">
         <div class="login-box">
             <div class="login-logo-wrapper">
-                <img src="logo1.png" alt="StreamHub Logo" width="128" height="128" class="login-logo-img">
+                <h1 style="color: #fff; font-size: 2rem;"><i class="fas fa-hub"></i> Media<span style="color: var(--theme-color, #3498db)">Hub</span></h1>
             </div>
-            <h2><i class="fas fa-play-circle"></i> Workin'Hub</h2>
-            <form id="login-form" onsubmit="return false;">
+            <h2>Acesso Restrito</h2>
+            <form id="form-login">
                 <div class="input-group">
-                    <label for="login-user">Usuário</label>
-                    <input type="text" id="login-user" placeholder="Digite o usuário">
+                    <label for="login-user">ID do Utilizador</label>
+                    <input type="text" id="login-user" placeholder="Ex: admin" required autocomplete="username">
                 </div>
                 <div class="input-group">
-                    <label for="login-pass">Senha</label>
-                    <input type="password" id="login-pass" placeholder="Digite a senha">
+                    <label for="login-pass">Palavra-passe</label>
+                    <input type="password" id="login-pass" placeholder="••••••••" required autocomplete="current-password">
                 </div>
-                <button type="button" id="btn-login" class="btn-primary">Entrar</button>
+                <button type="submit" id="btn-login" class="btn-primary">Entrar no Painel</button>
             </form>
         </div>
     </div>
 
+    <!-- ==========================================
+         CONTAINER PRINCIPAL DO APLICATIVO
+         ========================================== -->
     <div id="app-container" class="main-wrapper hidden">
         
+        <!-- CABEÇALHO SUPERIOR -->
         <header class="app-header">
             <div class="header-left">
-                <button id="toggle-sidebar" class="btn-icon" title="Menu"><i class="fas fa-bars"></i></button>
-                <h1 id="bc-root" class="brand-title"><i class="fas fa-play-circle"></i> Workin'Hub</h1>
-                <button id="btn-toggle-search-mobile" class="btn-icon btn-mobile-only" title="Buscar"><i class="fas fa-search"></i></button>
+                <button id="toggle-sidebar" class="btn-icon" title="Menu Lateral"><i class="fas fa-bars"></i></button>
+                <h1 id="bc-root" class="brand-title">MediaHub</h1>
             </div>
             
+            <!-- Busca Global Desktop -->
             <div class="header-center">
                 <div class="search-bar">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="search-yt-input" placeholder="Buscar vídeos globais no YouTube...">
+                    <input type="text" id="search-yt-input" placeholder="Pesquisar vídeos ou playlists no YouTube...">
                 </div>
             </div>
             
             <div class="header-right">
-                <button id="btn-open-admin" class="btn-admin" title="Painel de Controle"><i class="fas fa-cog"></i> Admin</button>
-                <button id="btn-logout" class="btn-logout" title="Sair"><i class="fas fa-sign-out-alt"></i> Sair</button>
+                <button id="btn-toggle-search-mobile" class="btn-icon btn-mobile-only" title="Pesquisar"><i class="fas fa-search"></i></button>
+                <button id="btn-open-admin" class="btn-admin" title="Administração"><i class="fas fa-cog"></i> Admin</button>
+                <button id="btn-logout" class="btn-logout" title="Sair"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         </header>
 
+        <!-- Barra de Busca Exclusiva Mobile -->
         <div id="mobile-search-row" class="mobile-search-container hidden">
             <div class="search-bar">
                 <i class="fas fa-search"></i>
-                <input type="text" id="search-yt-input-mobile" placeholder="Buscar vídeos no YouTube...">
+                <input type="text" id="search-yt-input-mobile" placeholder="Pesquisar no YouTube...">
             </div>
         </div>
 
+        <!-- CORPO DA APLICAÇÃO (SIDEBAR + MOSAICO) -->
         <div class="content-body">
+            
+            <!-- PAINEL LATERAL -->
             <aside id="sidebar" class="sidebar-panel">
                 <div class="sidebar-search">
-                    <input type="text" id="search-internal-input" placeholder="Filtrar categorias/mídias...">
+                    <input type="text" id="search-internal-input" placeholder="Filtrar categorias locais...">
                 </div>
                 <ul id="sidebar-tree" class="tree-root">
-                    </ul>
+                    <!-- Alimentado Dinamicamente pelo JS -->
+                </ul>
             </aside>
 
+            <!-- CONTEÚDO PRINCIPAL (MOSAICO DOS CARDS) -->
             <main class="mosaic-container">
                 <div class="breadcrumb-bar">
-                    <span class="bc-item" id="bc-home"><i class="fas fa-home"></i> Início</span>
-                    <span class="bc-item hidden" id="bc-category"><i class="fas fa-chevron-right"></i> <span class="txt"></span></span>
-                    <span class="bc-item hidden" id="bc-subcategory"><i class="fas fa-chevron-right"></i> <span class="txt"></span></span>
-                    <span class="bc-item hidden" id="bc-search"><i class="fas fa-chevron-right"></i> Resultados da Busca</span>
+                    <span id="bc-home" class="bc-item"><i class="fas fa-home"></i> Início</span>
+                    <span id="bc-category" class="bc-item hidden"> &gt; <i class="fas fa-folder"></i> <span class="txt">Cat</span></span>
+                    <span id="bc-subcategory" class="bc-item hidden"> &gt; <i class="fas fa-video"></i> <span class="txt">Sub</span></span>
+                    <span id="bc-search" class="bc-item hidden"> &gt; <i class="fas fa-search"></i> Resultados da Pesquisa</span>
                 </div>
 
                 <div id="mosaic-grid" class="mosaic-grid">
-                    </div>
+                    <!-- Cards de Categorias, Subcategorias ou Mídias injetados aqui -->
+                </div>
             </main>
         </div>
 
+        <!-- ==========================================
+             REPRODUTOR FLUTUANTE (PLAYER TRIPLO)
+             ========================================== -->
         <div id="player-container" class="floating-player hidden">
             <div class="player-header">
-                <h3 id="current-track-title">Reproduzindo mídia...</h3>
-                <button id="btn-close-player" class="btn-icon-close"><i class="fas fa-times"></i></button>
+                <h3 id="current-track-title">A reproduzir...</h3>
+                <button id="btn-close-player" class="btn-icon-close" title="Fechar Player"><i class="fas fa-times-circle"></i></button>
             </div>
             <div class="player-content">
+                <!-- Div nativa para a API do YouTube Iframe -->
                 <div id="yt-player" class="hidden"></div>
-                <iframe id="universal-player" class="hidden" allowfullscreen></iframe>
-                <video id="raw-player" controls class="hidden"></video>
+                <!-- Iframe universal para Archive.org e embeds variados -->
+                <iframe id="universal-player" class="hidden" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                <!-- Tag de vídeo nativa para links diretos .mp4/.mkv -->
+                <video id="raw-player" class="hidden" controls autoplay playsinline></video>
             </div>
         </div>
+
     </div>
 
+    <!-- ==========================================
+         MODAL CENTRAL DE ADMINISTRAÇÃO (ABAS)
+         ========================================== -->
     <div id="admin-modal" class="modal-overlay hidden">
         <div class="modal-box admin-box">
             <div class="modal-header">
-                <h2><i class="fas fa-sliders"></i> Painel Gerencial</h2>
+                <h2>Painel Administrativo</h2>
                 <button id="btn-close-admin" class="btn-close">&times;</button>
             </div>
             
-            <div class="tab-nav">
-                <button id="tab-trigger-add" class="tab-btn active"><i class="fas fa-plus-circle"></i> Adicionar Mídia</button>
-                <button id="tab-trigger-manage" class="tab-btn"><i class="fas fa-folder-open"></i> Organizar Bloco (CRUD)</button>
-                <button id="tab-trigger-channel" class="tab-btn"><i class="fas fa-tv"></i> Vincular Canal YT</button>
-            </div>
+            <!-- Navegação por Abas -->
+            <nav class="tab-nav">
+                <button id="tab-trigger-add" class="tab-btn active"><i class="fas fa-plus-circle"></i> Cadastrar Mídias</button>
+                <button id="tab-trigger-channel" class="tab-btn"><i class="fas fa-tv"></i> Vincular Canal</button>
+                <button id="tab-trigger-manage" class="tab-btn"><i class="fas fa-tasks"></i> Gerenciar Layout</button>
+            </nav>
 
             <div class="modal-body">
+                
+                <!-- ABA 1: CADASTRO MANUAL / CAPTURA -->
                 <div id="add-tab" class="tab-content">
                     <div class="form-row-inline">
-                        <input type="text" id="manual-media-url" placeholder="Cole a URL do vídeo do YouTube, Playlist, MP4 ou Embed">
+                        <input type="text" id="manual-media-url" placeholder="Cole o link do YouTube, Playlist, Arquivo MP4 ou Link Externo...">
                         <button id="btn-fetch-manual" class="btn-secundary">Capturar Dados</button>
                     </div>
+                    
                     <div class="preview-card-box">
-                        <img id="prev-thumb" src="https://placehold.co/120x90?text=Sem+Capa" alt="Capa">
+                        <img id="prev-thumb" src="https://placehold.co/120x90?text=Aguardando" alt="Miniatura">
                         <div class="preview-fields">
-                            <input type="text" id="prev-title" placeholder="Título capturado ou da playlist">
+                            <div class="input-block">
+                                <label>Título Identificador</label>
+                                <input type="text" id="prev-title" placeholder="Nome que aparecerá no card">
+                            </div>
                             <div class="inline-inputs">
-                                <input type="text" id="media-category" placeholder="Nome da Categoria">
-                                <input type="text" id="media-subcategory" placeholder="Nome da Subcategoria">
+                                <div class="input-block" style="flex:1;">
+                                    <label>Categoria Alvo</label>
+                                    <input type="text" id="media-category" placeholder="Ex: Filmes, Cursos">
+                                </div>
+                                <div class="input-block" style="flex:1;">
+                                    <label>Subcategoria Alvo (Opcional)</label>
+                                    <input type="text" id="media-subcategory" placeholder="Ex: Terror, Módulo 1">
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <button id="btn-save-media" class="btn-success-block"><i class="fas fa-cloud-upload-alt"></i> Salvar no meu Firebase</button>
+                    <button id="btn-save-media" class="btn-success-block">Salvar no meu Firebase</button>
                 </div>
 
-                <div id="manage-tab" class="tab-content hidden">
+                <!-- ABA 2: VINCULAR CANAL (VÍDEOS RECENTES) -->
+                <div id="channel-tab" class="tab-content hidden">
+                    <div class="form-row-inline">
+                        <input type="text" id="search-channel-input" placeholder="Digite o nome exato do Canal do YouTube...">
+                        <button id="btn-search-channel" class="btn-secundary">Buscar Canal</button>
+                    </div>
+                    
+                    <div id="channel-preview" class="preview-card-box" style="display:none; align-items:center;">
+                        <img id="chan-thumb" src="" style="border-radius:50%; width:80px; height:80px;">
+                        <div style="flex:1; display:flex; flex-direction:column; gap:5px;">
+                            <h3 id="chan-title-text" style="color:#fff;"></h3>
+                            <p id="chan-desc-text" style="font-size:0.85rem; color:var(--text-gray); max-height:50px; overflow:hidden;"></p>
+                        </div>
+                    </div>
+
+                    <div class="form-group-select">
+                        <label for="channel-target-category">Vincular e injetar os vídeos na Categoria:</label>
+                        <select id="channel-target-category">
+                            <!-- Injetado dinamicamente via JS -->
+                        </select>
+                    </div>
+                    <button id="btn-save-channel-link" class="btn-success-block">Confirmar Vínculo Dinâmico</button>
+                </div>
+
+                <!-- ABA 3: GERENCIADOR COMPLETO (CRUD SANFONA + BACKUPS) -->
+                <div id="manage-tab" class="tab-content hidden" style="height: calc(100% - 10px);">
                     <div class="split-manage-layout">
+                        <!-- Árvore estrutural interativa à esquerda -->
                         <div class="tree-panel-crud">
-                            <h3>Sua Estrutura de Diretórios</h3>
-                            <div id="crud-tree-list" class="crud-tree-list"></div>
+                            <h3 style="margin-bottom:10px; font-size:1rem; color:var(--theme-color);">Estrutura Interna de Pastas</h3>
+                            <div id="crud-tree-list">
+                                <!-- Sanfona de gerenciamento montada pelo JS -->
+                            </div>
                         </div>
                         
+                        <!-- Ferramentas JSON à direita -->
                         <div class="json-tools-panel">
+                            <button id="btn-export-all-json" class="btn-primary btn-export" style="width:100%; padding:12px;"><i class="fas fa-file-export"></i> Baixar Backup Geral (.json)</button>
+                            
+                            <div class="action-card-json">
+                                <label><i class="fas fa-code"></i> Importar por Código Texto</label>
+                                <textarea id="json-input-field" placeholder="Cole o código JSON do seu backup aqui para acumular dados..."></textarea>
+                                <button id="btn-submit-json-code" class="btn-primary" style="background:#d35400;">Injetar Código</button>
+                            </div>
+
                             <div class="action-card-json theme-picker-box">
-                                <label><i class="fas fa-palette"></i> Cor do Tema do Usuário</label>
-                                <p style="font-size: 0.75rem; color: #a8a8b3; margin-bottom: 5px;">Arraste o marcador para definir a sua cor exclusiva:</p>
+                                <label><i class="fas fa-palette"></i> Paleta de Cores do Utilizador</label>
                                 <div class="color-spectrum-wrapper">
                                     <div id="color-spectrum-bar" class="color-spectrum-bar">
                                         <div id="color-spectrum-selector" class="color-spectrum-selector">
-                                            <i class="fas fa-caret-down cursor-seta-top"></i>
-                                            <i class="fas fa-caret-up cursor-seta-bottom"></i>
+                                            <i class="fas fa-caret-down"></i>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="theme-preview-row">
-                                    <span id="theme-color-hex">#3498db</span>
-                                    <button id="btn-reset-theme" style="padding: 4px 8px; font-size: 0.75rem; background: #333; color: #fff;">Cor Padrão</button>
+                                    <span id="theme-color-hex">#3498DB</span>
+                                    <button id="btn-reset-theme" class="btn-icon" style="color:#e74c3c; padding:0;" title="Restaurar Cor Padrão"><i class="fas fa-undo"></i></button>
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-database"></i> Cópias de Segurança</h3>
-                            <div class="action-card-json">
-                                <label>Exportar Backup Integral</label>
-                                <button id="btn-export-all-json" class="btn-export"><i class="fas fa-download"></i> Exportar Tudo (.json)</button>
-                            </div>
-                            <div class="action-card-json">
-                                <label>Importar Arquivo de Backup (.json)</label>
-                                <input type="file" id="file-import-json" accept=".json">
-                            </div>
-                            <div class="action-card-json">
-                                <label>Importar via Código Texto JSON</label>
-                                <textarea id="json-input-field" placeholder="Cole o código estruturado aqui..."></textarea>
-                                <button id="btn-submit-json-code" class="btn-import-code"><i class="fas fa-file-import"></i> Injetar Código</button>
+                            <div class="action-card-json" style="background:transparent; border:1px dashed #29292e;">
+                                <label><i class="fas fa-file-import"></i> Importar via Arquivo</label>
+                                <input type="file" id="file-import-json" accept=".json" style="font-size:0.8rem; color:var(--text-gray);">
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="channel-tab" class="tab-content hidden">
-                    <div class="form-row-inline">
-                        <input type="text" id="search-channel-input" placeholder="Pesquise o nome do canal do YouTube...">
-                        <button id="btn-search-channel" class="btn-primary">Buscar Canal</button>
-                    </div>
-                    <div id="channel-preview" class="channel-preview-box" style="display: none;">
-                        <img id="chan-thumb" src="" alt="Canal">
-                        <div class="chan-info">
-                            <h4 id="chan-title-text"></h4>
-                            <p id="chan-desc-text"></p>
-                        </div>
-                    </div>
-                    <div class="form-group-select">
-                        <label for="channel-target-category">Vincular na Categoria:</label>
-                        <select id="channel-target-category"></select>
-                    </div>
-                    <button id="btn-save-channel-link" class="btn-success-block"><i class="fas fa-link"></i> Salvar Vínculo Dinâmico</button>
-                </div>
             </div>
         </div>
     </div>
 
+    <!-- ==========================================
+         MODAL EXCLUSIVO PARA EDIÇÃO AVANÇADA DA MÍDIA
+         ========================================== -->
     <div id="edit-media-modal" class="modal-overlay hidden">
         <div class="modal-box edit-box">
             <div class="modal-header">
-                <h3>Editar Dados da Mídia</h3>
+                <h3><i class="fas fa-edit"></i> Editar Mídia</h3>
+                <button id="btn-cancel-edit-media" class="btn-close">&times;</button>
             </div>
-            <div class="modal-body font-inputs">
+            <div class="modal-body">
                 <div class="input-block">
                     <label>Título da Mídia</label>
                     <input type="text" id="edit-field-title">
                 </div>
                 <div class="input-block">
-                    <label>URL / Link do Conteúdo</label>
+                    <label>Link / URL de Reprodução</label>
                     <input type="text" id="edit-field-link">
                 </div>
                 <div class="input-block">
@@ -210,21 +260,22 @@
                     <input type="text" id="edit-field-capa">
                 </div>
                 <div class="input-block">
-                    <label>Categoria</label>
+                    <label>Mover para Categoria</label>
                     <input type="text" id="edit-field-category">
                 </div>
                 <div class="input-block">
-                    <label>Subcategoria</label>
+                    <label>Mover para Subcategoria</label>
                     <input type="text" id="edit-field-subcategory">
                 </div>
             </div>
             <div class="modal-footer-btns">
-                <button id="btn-cancel-edit-media" class="btn-default">Cancelar</button>
-                <button id="btn-submit-edit-media" class="btn-success">Salvar Alterações</button>
+                <button id="btn-cancel-edit-media-2" class="btn-default" style="border-radius:4px;">Cancelar</button>
+                <button id="btn-submit-edit-media" class="btn-success" style="border-radius:4px;">Salvar Mudanças</button>
             </div>
         </div>
     </div>
 
+    <!-- Scripts de Inicialização Obrigatórios -->
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="app.js"></script>
 </body>
