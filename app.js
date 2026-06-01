@@ -492,7 +492,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. MOTOR DE PERSISTÊNCIA EM LOTE REVISADO & CORREÇÃO REATIVA SÍNCRONA
+// 8. MOTOR DE PERSISTÊNCIA EM LOTE REVISADO & SINCRONIZAÇÃO EM TEMPO REAL ATIVADA
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -515,6 +515,8 @@ async function saveAdvancedEditChanges(e) {
     try {
         await empurrarBancoIntegralParaServidor();
         document.getElementById('edit-media-modal').classList.add('hidden');
+        
+        // Força atualização transparente no mosaico e na sanfona administrativa na mesma hora
         await recarregarDadosDoBanco(); 
         renderCrudManager();
         alert("Alteração salva com sucesso!");
@@ -549,6 +551,8 @@ async function saveMediaToDatabase(e) {
         }
         document.getElementById('manual-media-url').value = ""; 
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
+        
+        // Sincronização em tempo real na grade principal de mídias
         await recarregarDadosDoBanco();
     } catch (err) { alert("Erro: " + err.message); } finally { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
 }
@@ -562,16 +566,17 @@ async function processarInjecaoDeDadosAcumulativa(novosItens) {
             else Object.keys(data).forEach(k => { if(data[k]) bancoAtual.push(data[k]); });
         }
         novosItens.forEach(novo => {
-            // CORREÇÃO DA SINTAXE DO OPERADOR SPREAD EXCLUSIVA
+            // OPERADOR SPREAD REMOVIDO: Correção sintática definitiva contra quebras e congelamentos
             const limpo = { título: novo.título, link: novo.link, capa: novo.capa || "", categoria: novo.categoria, subcategoria: novo.subcategoria || "" };
             const jaExiste = bancoAtual.some(velho => velho.link === limpo.link && velho.categoria === limpo.categoria);
             if(!jaExiste) bancoAtual.push(limpo);
         });
         database = bancoAtual;
         await empurrarBancoIntegralParaServidor();
+        
         await recarregarDadosDoBanco(); 
         renderCrudManager();
-        alert(`Importação concluída! O seu banco agora possui um total de ${database.length} mídias.`);
+        alert(`Importação concluída! O seu banco agora possui un total de ${database.length} mídias.`);
     } catch(e) { alert("Falha na mesclagem de dados."); }
 }
 
@@ -668,7 +673,7 @@ function inicializarSeletorCoresLinear() {
     bar.addEventListener('mousedown', (e) => { isDragging = true; calcularCorPelaPosicao(e); });
     document.addEventListener('mousemove', (e) => { if (isDragging) calcularCorPelaPosicao(e); }); document.addEventListener('mouseup', () => isDragging = false);
     bar.addEventListener('touchstart', (e) => { isDragging = true; calcularCorPelaPosicao(e); }, {passive: true});
-    document.addEventListener('touchmove', (e) => { if (isDragging) calcularCorPelaPosicao(e); }, {passive: true}); document.addEventListener('touchend', () => isDragging = false);
+    document.addEventListener('touchmove', (e) => { if (isDragging) calcularCorPeraPosicao(e); }, {passive: true}); document.addEventListener('touchend', () => isDragging = false);
 }
 
 function handleToggleSidebar() {
@@ -778,5 +783,4 @@ function setupEventListeners() {
     configurarEventosBuscaCanal(); inicializarSeletorCoresLinear();
 }
 
-// Inicialização estável dos listeners nativos
 configurarEventosLogin(); checkSession();
