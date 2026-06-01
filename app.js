@@ -11,7 +11,7 @@ const USERS_DATABASE = {
     "dipriv": { 
         password: "arcnet215", 
         defaultColor: "#e74c3c",
-        firebaseUrl: "https://dipriv-47697-default-rtdb.firebaseio.com/.json",
+        firebaseUrl: "https://workin--music-default-rtdb.firebaseio.com/midias.json",
         ytApiKey: "AIzaSyD2x7SjdblFqlxQdKHlgfSZA5Nmjb1QbMk"
     }
 };
@@ -36,6 +36,7 @@ let lastYtSearchResults = [];
 let activeEditingIndex = null;
 let canalSelecionadoProvisorio = null;
 
+// Estados de Expansão Preservados para Tempo Real
 let expandedCrudCats = {};
 let expandedCrudSubs = {};
 
@@ -292,9 +293,7 @@ async function buscarVideosRecentesDoCanal(playlistId) {
     try {
         const res = await fetch(url); const data = await res.json();
         if(data.items) {
-            // INVERSÃO PRÁTICA: .reverse() coloca os vídeos antigos primeiro e os atuais lá embaixo
             const itensInvertidos = data.items.reverse();
-            
             currentPlaylist = itensInvertidos.map(item => ({
                 título: item.snippet.title, link: `https://www.youtube.com/embed/${item.snippet.resourceId.videoId}`,
                 capa: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
@@ -436,7 +435,7 @@ function extractYoutubeId(url) {
 }
 
 // ==========================================
-// 7. ÁRVORE GERENCIAL SANFONA (CRUD COMPLETO)
+// 7. ÁRVORE GERENCIAL SANFONA (CRUD COMPLETO REAL-TIME FIX)
 // ==========================================
 function renderCrudManager() {
     const listContainer = document.getElementById('crud-tree-list'); if (!listContainer) return; listContainer.innerHTML = '';
@@ -447,7 +446,12 @@ function renderCrudManager() {
         if(!cat) return;
         const catRow = createCrudRow(cat, 'categoria', () => { let n = prompt("Novo nome para a Categoria:", cat); if(n && n.trim() !== "") renomearCategoriaCompleta(cat, n.trim()); }, () => { if(confirm(`Excluir ${cat}?`)) deletarCategoriaCompleta(cat); }, () => downloadJSON(database.filter(item => item.categoria === cat), `cat_${cat}`));
         const subContainer = document.createElement('div'); subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none';
-        catRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudCats[cat] = !expandedCrudCats[cat]; subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none'; });
+        
+        catRow.addEventListener('click', (e) => { 
+            if(e.target.closest('.crud-actions')) return; 
+            expandedCrudCats[cat] = !expandedCrudCats[cat]; 
+            subContainer.style.display = expandedCrudCats[cat] ? 'block' : 'none'; 
+        });
         listContainer.appendChild(catRow);
 
         const subcategories = [...new Set(database.filter(item => item.categoria === cat).map(item => item.subcategoria))];
@@ -456,7 +460,12 @@ function renderCrudManager() {
         subcategories.sort().forEach(sub => {
             const subRow = createCrudRow(sub, 'subcategoria', sub === "Vídeos Recentes" ? null : () => { let n = prompt("Novo nome para a Subcategoria:", sub); if(n && n.trim() !== "") renomearSubcategoriaCompleta(cat, sub, n.trim()); }, () => { if(confirm(`Excluir a subcategoria ${sub}?`)) deletarSubcategoria(cat, sub); }, () => downloadJSON(database.filter(item => item.categoria === cat && item.subcategoria === sub), `sub_${sub}`));
             const mediaContainer = document.createElement('div'); mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none';
-            subRow.addEventListener('click', (e) => { if(e.target.closest('.crud-actions')) return; expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub]; mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none'; });
+            
+            subRow.addEventListener('click', (e) => { 
+                if(e.target.closest('.crud-actions')) return; 
+                expandedCrudSubs[cat + '_' + sub] = !expandedCrudSubs[cat + '_' + sub]; 
+                mediaContainer.style.display = expandedCrudSubs[cat + '_' + sub] ? 'block' : 'none'; 
+            });
             subContainer.appendChild(subRow);
 
             if(sub === "Vídeos Recentes") {
@@ -483,7 +492,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. MOTOR DE PERSISTÊNCIA EM LOTE (PUT) REATIVO
+// 8. MOTOR DE PERSISTÊNCIA EM LOTE REVISADO & CORREÇÃO REATIVA SÍNCRONA
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -505,10 +514,12 @@ async function saveAdvancedEditChanges(e) {
     
     try {
         await empurrarBancoIntegralParaServidor();
-        alert("Alteração salva com sucesso!");
         document.getElementById('edit-media-modal').classList.add('hidden');
+        
+        // Sincronização em Tempo Real Sem Quebras: Carrega e reconstrói o painel de imediato
         await recarregarDadosDoBanco(); 
         renderCrudManager();
+        alert("Alteração salva com sucesso!");
     } catch (err) { alert("Erro: " + err.message); }
 }
 
@@ -538,7 +549,10 @@ async function saveMediaToDatabase(e) {
             await empurrarBancoIntegralParaServidor();
             alert("Vídeo único salvo com sucesso!");
         }
-        document.getElementById('manual-media-url').value = ""; if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
+        document.getElementById('manual-media-url').value = ""; 
+        if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
+        
+        // Renderiza reativamente na grade sem atraso
         await recarregarDadosDoBanco();
     } catch (err) { alert("Erro: " + err.message); } finally { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
 }
@@ -558,9 +572,11 @@ async function processarInjecaoDeDadosAcumulativa(novosItens) {
         });
         database = bancoAtual;
         await empurrarBancoIntegralParaServidor();
-        alert(`Importação concluída! O seu banco agora possui um total de ${database.length} mídias.`);
+        
+        // Atualiza dinamicamente e reconstrói o CRUD
         await recarregarDadosDoBanco(); 
         renderCrudManager();
+        alert(`Importação concluída! O seu banco agora possui um total de ${database.length} mídias.`);
     } catch(e) { alert("Falha na mesclagem de dados."); }
 }
 
@@ -584,7 +600,8 @@ async function deletarMidiaUnica(indexNoBanco) {
     try {
         database.splice(indexNoBanco, 1);
         await empurrarBancoIntegralParaServidor();
-        alert("Mídia removida com sucesso!");
+        
+        // Re-renderização reativa imediata sem perder o layout aberto
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir mídia."); }
@@ -594,7 +611,8 @@ async function deletarSubcategoria(cat, sub) {
     try {
         database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
         await empurrarBancoIntegralParaServidor();
-        alert("Subcategoria removida!");
+        
+        // Re-renderização reativa imediata sem perder o layout aberto
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir subcategoria."); }
@@ -605,7 +623,7 @@ async function deletarCategoriaCompleta(cat) {
         database = database.filter(item => item.categoria !== cat);
         await empurrarBancoIntegralParaServidor();
         await fetch(obterUrlCanalIndividual(btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "")), { method: 'DELETE' });
-        alert("Categoria removida por completo!");
+        
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
         await recarregarDadosDoBanco(); 
         renderCrudManager();
@@ -621,7 +639,6 @@ async function renomearCategoriaCompleta(antiga, nova) {
             const newNodeName = btoa(unescape(encodeURIComponent(nova))).replace(/=/g, "");
             await fetch(obterUrlCanalIndividual(newNodeName), { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]) }); await fetch(obterUrlCanalIndividual(oldNodeName), { method: "DELETE" });
         }
-        alert("Categoria renomeada!");
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro."); }
@@ -631,7 +648,6 @@ async function renomearSubcategoriaCompleta(cat, antigaSub, novaSub) {
     try {
         database.forEach(item => { if(item.categoria === cat && item.subcategoria === antigaSub) item.subcategoria = novaSub; });
         await empurrarBancoIntegralParaServidor();
-        alert("Subcategoria renomeada!");
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro."); }
@@ -718,6 +734,7 @@ function setupEventListeners() {
     if (document.getElementById('tab-trigger-channel')) document.getElementById('tab-trigger-channel').onclick = (e) => { e.preventDefault(); switchTabs('channel-tab', 'tab-trigger-channel'); };
     if (document.getElementById('btn-submit-edit-media')) document.getElementById('btn-submit-edit-media').onclick = (e) => saveAdvancedEditChanges(e);
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
+    if (document.getElementById('btn-cancel-edit-media-2')) document.getElementById('btn-cancel-edit-media-2').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
     const fileImport = document.getElementById('file-import-json');
     if (fileImport) {
@@ -748,5 +765,5 @@ function setupEventListeners() {
     configurarEventosBuscaCanal(); inicializarSeletorCoresLinear();
 }
 
-// Inicialização imediata com os listeners corrigidos
+// Inicialização imediata
 configurarEventosLogin(); checkSession();
