@@ -3,11 +3,11 @@
 // ==========================================
 // Cada usuário agora possui sua própria senha, cor nativa, link do Firebase e API Key do YouTube
 const USERS_DATABASE = {
-    "admin": { 
-        password: "123", 
+    "diegosilvaeo": { 
+        password: "arcnet2154", 
         defaultColor: "#3498db",
-        firebaseUrl: "https://SEU-PROJETO-ADMIN1.firebaseio.com/midias.json",
-        ytApiKey: "SUA_YOUTUBE_API_KEY_DO_ADMIN_1"
+        firebaseUrl: "https://workin--music-default-rtdb.firebaseio.com/midias.json",
+        ytApiKey: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ"
     },
     "admin2": { 
         password: "456", 
