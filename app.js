@@ -8,11 +8,11 @@ const USERS_DATABASE = {
         firebaseUrl: "https://workin--music-default-rtdb.firebaseio.com/midias.json",
         ytApiKey: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ"
     },
-    "di.workin": { 
-        password: "arcnet2154", 
+    "dipriv": { 
+        password: "arcnet215", 
         defaultColor: "#e74c3c",
-        firebaseUrl: "https://SEU-PROJETO-ADMIN2.firebaseio.com/midias.json",
-        ytApiKey: "SUA_YOUTUBE_API_KEY_DO_ADMIN_2"
+        firebaseUrl: "https://workin--music-default-rtdb.firebaseio.com/midias.json",
+        ytApiKey: "AIzaSyD2x7SjdblFqlxQdKHlgfSZA5Nmjb1QbMk"
     }
 };
 
@@ -469,10 +469,15 @@ async function saveAdvancedEditChanges(e) {
     database[activeEditingIndex].título = t; database[activeEditingIndex].link = l; database[activeEditingIndex].capa = c;
     database[activeEditingIndex].categoria = cat; database[activeEditingIndex].subcategoria = sub;
     
-    await empurrarBancoIntegralParaServidor();
-    alert("Alteração salva com sucesso!");
-    document.getElementById('edit-media-modal').classList.add('hidden');
-    currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco(); renderCrudManager();
+    try {
+        await empurrarBancoIntegralParaServidor();
+        alert("Alteração salva com sucesso!");
+        document.getElementById('edit-media-modal').classList.add('hidden');
+        
+        // CORREÇÃO: Dispara a atualização reativa em tempo real na tela
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
+    } catch (err) { alert("Erro: " + err.message); }
 }
 
 async function saveMediaToDatabase(e) {
@@ -502,35 +507,32 @@ async function saveMediaToDatabase(e) {
             alert("Vídeo único salvo com sucesso!");
         }
         document.getElementById('manual-media-url').value = ""; if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
-        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco();
-    } catch (err) { alert("Erro: " + err.message); } finally { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
+        
+        // CORREÇÃO: Renderiza imediatamente os novos cards no mosaico principal em tempo real
+        await recarregarDadosDoBanco();
+    } catch (err) { alert("Erro: " + err.message); } finaly { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
 }
 
-// SOLUÇÃO DO IMPORTADOR ACUMULATIVO (ADICIONA EM VEZ DE SUBSTITUIR)
 async function processarInjecaoDeDadosAcumulativa(novosItens) {
     if(!Array.isArray(novosItens) || novosItens.length === 0) return alert("Nenhum dado válido para importar.");
-    
-    // Baixa o estado mais recente do Firebase para garantir sincronia absoluta
     try {
-        const res = await fetch(CONFIG.FIREBASE_URL);
-        const data = await res.json();
-        let bancoAtual = [];
+        const res = await fetch(CONFIG.FIREBASE_URL); const data = await res.json(); let bancoAtual = [];
         if (data) {
             if (Array.isArray(data)) bancoAtual = data.filter(item => item !== null);
             else Object.keys(data).forEach(k => { if(data[k]) bancoAtual.push(data[k]); });
         }
-        
-        // Combina as listas filtrando mídias com o mesmo link para evitar duplicados
         novosItens.forEach(novo => {
             const limpo = { título: novo.título, link: novo.link, capa: novo.capa || "", categoria: novo.categoria, subcategoria: novo.subcategoria || "" };
             const jaExiste = bancoAtual.some(velho => velho.link === limpo.link && velho.categoria === limpo.categoria);
             if(!jaExiste) bancoAtual.push(limpo);
         });
-
         database = bancoAtual;
         await empurrarBancoIntegralParaServidor();
         alert(`Importação concluída! O seu banco agora possui um total de ${database.length} mídias.`);
-        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco(); renderCrudManager();
+        
+        // CORREÇÃO: Alimenta e recarrega os mosaicos em lote de forma transparente
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
     } catch(e) { alert("Falha na mesclagem de dados."); }
 }
 
@@ -550,12 +552,16 @@ async function empurrarBancoIntegralParaServidor() {
     if (!resposta.ok) throw new Error("Erro na gravação remota do banco.");
 }
 
-// ROTINAS DE DELEÇÃO CORRIGIDAS POR ÍNDICES DE BANCO
+// ROTINAS DE DELEÇÃO COM RE-INJEÇÃO REATIVA EM TEMPO REAL
 async function deletarMidiaUnica(indexNoBanco) {
     try {
         database.splice(indexNoBanco, 1);
         await empurrarBancoIntegralParaServidor();
-        alert("Mídia removida com sucesso!"); await recarregarDadosDoBanco(); renderCrudManager();
+        alert("Mídia removida com sucesso!");
+        
+        // CORREÇÃO: Atualiza a sanfona do gerenciador e a grade de cards dinamicamente
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
     } catch(e) { alert("Erro ao excluir mídia."); }
 }
 
@@ -563,7 +569,11 @@ async function deletarSubcategoria(cat, sub) {
     try {
         database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
         await empurrarBancoIntegralParaServidor();
-        alert("Subcategoria removida!"); await recarregarDadosDoBanco(); renderCrudManager();
+        alert("Subcategoria removida!");
+        
+        // CORREÇÃO: Atualiza a sanfona do gerenciador e a grade de cards dinamicamente
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
     } catch(e) { alert("Erro ao excluir subcategoria."); }
 }
 
@@ -572,7 +582,12 @@ async function deletarCategoriaCompleta(cat) {
         database = database.filter(item => item.categoria !== cat);
         await empurrarBancoIntegralParaServidor();
         await fetch(obterUrlCanalIndividual(btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "")), { method: 'DELETE' });
-        alert("Categoria removida por completo!"); currentView = 'categories'; selectedCategory = ''; selectedSubcategory = ''; await recarregarDadosDoBanco(); renderCrudManager();
+        alert("Categoria removida por completo!");
+        currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
+        
+        // CORREÇÃO: Atualiza a sanfona do gerenciador e a grade de cards dinamicamente
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
     } catch(e) { alert("Erro ao excluir categoria."); }
 }
 
@@ -585,7 +600,11 @@ async function renomearCategoriaCompleta(antiga, nova) {
             const newNodeName = btoa(unescape(encodeURIComponent(nova))).replace(/=/g, "");
             await fetch(obterUrlCanalIndividual(newNodeName), { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]) }); await fetch(obterUrlCanalIndividual(oldNodeName), { method: "DELETE" });
         }
-        alert("Categoria renomeada!"); await recarregarDadosDoBanco(); renderCrudManager();
+        alert("Categoria renomeada!");
+        
+        // CORREÇÃO: Sincronização reativa instantânea
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
     } catch(e) { alert("Erro."); }
 }
 
@@ -593,7 +612,11 @@ async function renomearSubcategoriaCompleta(cat, antigaSub, novaSub) {
     try {
         database.forEach(item => { if(item.categoria === cat && item.subcategoria === antigaSub) item.subcategoria = novaSub; });
         await empurrarBancoIntegralParaServidor();
-        alert("Subcategoria renomeada!"); await recarregarDadosDoBanco(); renderCrudManager();
+        alert("Subcategoria renomeada!");
+        
+        // CORREÇÃO: Sincronização reativa instantânea
+        await recarregarDadosDoBanco(); 
+        renderCrudManager();
     } catch(e) { alert("Erro."); }
 }
 
