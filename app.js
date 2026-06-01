@@ -4,7 +4,7 @@
 const USERS_DATABASE = {
     "diegosilvaeo": { 
         password: "arcnet2154", 
-        defaultColor: "#1bffc1",
+        defaultColor: "#23ffb4",
         firebaseUrl: "https://workin--music-default-rtdb.firebaseio.com/midias.json",
         ytApiKey: "AIzaSyATXiihPhDZohvy8mJKsAk8vjZ4WkPekmQ"
     },
@@ -516,7 +516,7 @@ async function saveAdvancedEditChanges(e) {
         await empurrarBancoIntegralParaServidor();
         document.getElementById('edit-media-modal').classList.add('hidden');
         
-        // Sincronização em Tempo Real Sem Quebras: Carrega e reconstrói o painel de imediato
+        // CORREÇÃO: Força o recarregamento imediato e o redesenho dinâmico do CRUD
         await recarregarDadosDoBanco(); 
         renderCrudManager();
         alert("Alteração salva com sucesso!");
@@ -552,7 +552,7 @@ async function saveMediaToDatabase(e) {
         document.getElementById('manual-media-url').value = ""; 
         if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
         
-        // Renderiza reativamente na grade sem atraso
+        // CORREÇÃO: Força atualização instantânea da grade principal na tela
         await recarregarDadosDoBanco();
     } catch (err) { alert("Erro: " + err.message); } finally { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
 }
@@ -566,14 +566,14 @@ async function processarInjecaoDeDadosAcumulativa(novosItens) {
             else Object.keys(data).forEach(k => { if(data[k]) bancoAtual.push(data[k]); });
         }
         novosItens.forEach(novo => {
-            const limpo = { título: novo.título, link: novo.link, capa: novo.capa || "", categoria: novo.categoria, subcategoria: novo.subcategoria || "" };
+            const limpo = { título: ...[novo.título], link: novo.link, capa: novo.capa || "", categoria: novo.categoria, subcategoria: novo.subcategoria || "" };
             const jaExiste = bancoAtual.some(velho => velho.link === limpo.link && velho.categoria === limpo.categoria);
             if(!jaExiste) bancoAtual.push(limpo);
         });
         database = bancoAtual;
         await empurrarBancoIntegralParaServidor();
         
-        // Atualiza dinamicamente e reconstrói o CRUD
+        // CORREÇÃO: Força sincronização após processamento acumulativo
         await recarregarDadosDoBanco(); 
         renderCrudManager();
         alert(`Importação concluída! O seu banco agora possui um total de ${database.length} mídias.`);
@@ -601,7 +601,7 @@ async function deletarMidiaUnica(indexNoBanco) {
         database.splice(indexNoBanco, 1);
         await empurrarBancoIntegralParaServidor();
         
-        // Re-renderização reativa imediata sem perder o layout aberto
+        // CORREÇÃO: Recarregamento reativo síncrono para renderizar sumiço na hora
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir mídia."); }
@@ -612,7 +612,7 @@ async function deletarSubcategoria(cat, sub) {
         database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
         await empurrarBancoIntegralParaServidor();
         
-        // Re-renderização reativa imediata sem perder o layout aberto
+        // CORREÇÃO: Recarregamento reativo síncrono para renderizar sumiço na hora
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir subcategoria."); }
@@ -736,6 +736,29 @@ function setupEventListeners() {
     if (document.getElementById('btn-cancel-edit-media')) document.getElementById('btn-cancel-edit-media').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
     if (document.getElementById('btn-cancel-edit-media-2')) document.getElementById('btn-cancel-edit-media-2').onclick = (e) => { e.preventDefault(); if(document.getElementById('edit-media-modal')) document.getElementById('edit-media-modal').classList.add('hidden'); };
 
+    // CORREÇÃO: Vinculação estável do botão de exportação geral
+    if (document.getElementById('btn-export-all-json')) {
+        document.getElementById('btn-export-all-json').onclick = (e) => {
+            e.preventDefault(); if (database.length === 0) return alert("Banco vazio!");
+            downloadJSON(database, "backup_completo_streamhub");
+        };
+    }
+
+    if (document.getElementById('btn-submit-json-code')) {
+        document.getElementById('btn-submit-json-code').onclick = (e) => { e.preventDefault(); importarCodigoJSON(); };
+    }
+
+    if (document.getElementById('btn-reset-theme')) {
+        document.getElementById('btn-reset-theme').onclick = (e) => {
+            e.preventDefault();
+            if(currentUser) {
+                localStorage.removeItem(`streamhub_theme_${currentUser}`);
+                let corOriginal = USERS_DATABASE[currentUser] ? USERS_DATABASE[currentUser].defaultColor : "#3498db";
+                aplicarCorTema(corOriginal); posicionarSetaPelaCor(corOriginal);
+            }
+        };
+    }
+
     const fileImport = document.getElementById('file-import-json');
     if (fileImport) {
         fileImport.onchange = (e) => {
@@ -765,5 +788,4 @@ function setupEventListeners() {
     configurarEventosBuscaCanal(); inicializarSeletorCoresLinear();
 }
 
-// Inicialização imediata
 configurarEventosLogin(); checkSession();
