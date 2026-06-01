@@ -11,7 +11,7 @@ const USERS_DATABASE = {
     "dipriv": { 
         password: "arcnet215", 
         defaultColor: "#e74c3c",
-        firebaseUrl: "https://workin--music-default-rtdb.firebaseio.com/midias.json",
+        firebaseUrl: "https://dipriv-47697-default-rtdb.firebaseio.com/.json",
         ytApiKey: "AIzaSyD2x7SjdblFqlxQdKHlgfSZA5Nmjb1QbMk"
     }
 };
@@ -84,7 +84,7 @@ function carregarTemaDoUsuarioLogado(usuario) {
 }
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO E EVENTOS DE LOGIN (FIXED)
+// 1. AUTENTICAÇÃO COM SESSÃO E EVENTOS DE LOGIN
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
@@ -109,7 +109,6 @@ function configurarEventosLogin() {
     const inputPass = document.getElementById('login-pass');
     const btnLogin = document.getElementById('btn-login');
 
-    // Remove qualquer vinculação duplicada anterior limpando referências nativas diretas
     if (inputUser) {
         inputUser.onkeydown = null;
         inputUser.onkeydown = (e) => {
@@ -206,7 +205,6 @@ function alimentarSeletorCategoriasCanais() {
     if(categories.length === 0) { select.innerHTML = `<option value="">Nenhuma categoria encontrada.</option>`; return; }
     categories.forEach(cat => { const opt = document.createElement("option"); opt.value = cat; opt.innerText = cat; select.appendChild(opt); });
 }
-
 // ==========================================
 // 3. RENDERIZAÇÃO DO MOSAICO
 // ==========================================
@@ -286,7 +284,7 @@ function createCard(title, imgSrc, showAddButton = false, isPlaylist = false, cl
 }
 
 // ==========================================
-// 4. API DE CANAIS DINÂMICOS
+// 4. API DE CANAIS DINÂMICOS - ORDEM CRONOLÓGICA INVERTIDA
 // ==========================================
 async function buscarVideosRecentesDoCanal(playlistId) {
     const grid = document.getElementById('mosaic-grid'); if (grid) grid.innerHTML = '<h3>Atualizando vídeos recentes do canal via API...</h3>';
@@ -294,12 +292,18 @@ async function buscarVideosRecentesDoCanal(playlistId) {
     try {
         const res = await fetch(url); const data = await res.json();
         if(data.items) {
-            currentPlaylist = data.items.map(item => ({
+            // INVERSÃO PRÁTICA: .reverse() coloca os vídeos antigos primeiro e os atuais lá embaixo
+            const itensInvertidos = data.items.reverse();
+            
+            currentPlaylist = itensInvertidos.map(item => ({
                 título: item.snippet.title, link: `https://www.youtube.com/embed/${item.snippet.resourceId.videoId}`,
                 capa: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
                 categoria: selectedCategory, subcategoria: "Vídeos Recentes", isDinâmico: true
             }));
-            if (grid) { grid.innerHTML = ''; currentPlaylist.forEach((track, index) => { grid.appendChild(createCard(track.título, track.capa, false, false, () => { playTrack(index); }, -1)); }); }
+            if (grid) { 
+                grid.innerHTML = ''; 
+                currentPlaylist.forEach((track, index) => { grid.appendChild(createCard(track.título, track.capa, false, false, () => { playTrack(index); }, -1)); }); 
+            }
         }
     } catch (e) { if (grid) grid.innerHTML = '<h3>Erro ao carregar feeds do canal.</h3>'; }
 }
@@ -412,7 +416,7 @@ function playTrack(index) {
 
     const ytPlayerEl = document.getElementById('yt-player'); const univPlayerEl = document.getElementById('universal-player'); const rawPlayerEl = document.getElementById('raw-player');
     if (univPlayerEl) univPlayerEl.src = ""; if (rawPlayerEl) rawPlayerEl.src = "";
-    if (univPlayerEl) univPlayerEl.classList.add('hidden'); if (rawPlayerEl) rawPlayerEl.classList.add('hidden'); if (ytPlayerEl) ytPlayerEl.classList.add('hidden');
+    if (univPlayerEl) univPlayerEl.classList.add('hidden'); if (rawPlayerEl) rawPlayerEl.classList.add('hidden'); if (ytPlayerEl) ytPlayerEl.classList.remove('hidden');
     if (rawPlayerEl) rawPlayerEl.pause(); const linkOriginal = track.link.trim(); const vId = extractYoutubeId(linkOriginal);
 
     if(vId) {
@@ -479,7 +483,7 @@ function createCrudRow(title, type, onEdit, onDel, onExp) {
 }
 
 // ==========================================
-// 8. MOTOR DE PERSISTÊNCIA EM LOTE REVISADO (PUT)
+// 8. MOTOR DE PERSISTÊNCIA EM LOTE (PUT) REATIVO
 // ==========================================
 function openAdvancedEditModal(index) {
     activeEditingIndex = index; const item = database[index];
@@ -647,8 +651,8 @@ function inicializarSeletorCoresLinear() {
         const rect = bar.getBoundingClientRect(); let clientX = e.clientX || (e.touches && e.touches[0].clientX); let x = clientX - rect.left;
         if (x < 0) x = 0; if (x > rect.width) x = rect.width; let percent = x / rect.width; selector.style.left = (percent * 100) + '%';
         let segment = percent * (coresGradiente.length - 1); let index = Math.floor(segment); let factor = segment - index;
-        let cor1 = coresGradiente[index]; let cor2 = coresGradiente[index + 1] || coresGradiente[index];
-        let rgb1 = hexToRgb(cor1); let rgb2 = hexToRgb(cor2);
+        let core1 = coresGradiente[index]; let cor2 = coresGradiente[index + 1] || coresGradiente[index];
+        let rgb1 = hexToRgb(core1); let rgb2 = hexToRgb(cor2);
         let r = Math.round(rgb1.r + factor * (rgb2.r - rgb1.r)); let g = Math.round(rgb1.g + factor * (rgb2.g - rgb1.g)); let b = Math.round(rgb1.b + factor * (rgb2.b - rgb1.b));
         let hexResult = rgbToHex(r, g, b); aplicarCorTema(hexResult); if(currentUser) localStorage.setItem(`streamhub_theme_${currentUser}`, hexResult);
     }
