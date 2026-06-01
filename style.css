@@ -269,15 +269,15 @@ button:active {
 .search-btn-group button { flex: 1; padding: 6px; font-size: 0.8rem; color: #fff; }
 
 /* ==========================================
-   4. PLAYER DESKTOP - FIXADO EM 50% NO MEIO DA TELA
+   4. PLAYER DESKTOP - ALTERADO PARA 60% DE LARGURA
    ========================================== */
 .floating-player {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%); 
-    width: 50vw; /* Alterado de 65vw para 50vw estável no computador */
-    max-width: 950px; 
+    width: 60vw; /* AJUSTADO: Passou de 50vw para 60vw do monitor */
+    max-width: 1050px; 
     min-width: 480px; 
     background: var(--bg-card);
     border: 1px solid #29292e;
@@ -465,12 +465,10 @@ button:active {
         display: none !important; 
     }
     
-    /* Quando o player estiver aberto no celular, empurra o mosaico para baixo para não sobrepor nada */
     .main-wrapper:has(.floating-player:not(.hidden)) .content-body {
         margin-top: calc(60px + 56.25vw + 45px) !important;
     }
     
-    /* Ajuste extra caso a barra de pesquisa mobile E o player estejam abertos juntos */
     .main-wrapper:has(.mobile-search-container:not(.hidden)):has(.floating-player:not(.hidden)) .content-body {
         margin-top: calc(102px + 56.25vw + 45px) !important;
     }
@@ -486,24 +484,22 @@ button:active {
     .split-manage-layout { flex-direction: column; overflow-y: auto; }
     .tree-panel-crud { border-right: none; border-bottom: 1px solid #29292e; padding-bottom: 15px; padding-right: 0; }
     
-    /* CORREÇÃO DO PLAYER MOBILE: Posicionado abaixo do cabeçalho sem quebrar a proporção lateral */
     .floating-player { 
         position: fixed !important;
-        top: 60px !important; /* Ancorado logo abaixo da barra superior */
+        top: 60px !important; 
         left: 0 !important; 
         bottom: auto !important;
         transform: none !important; 
-        width: 100vw !important; /* Preenche perfeitamente a largura do celular sem cortes */
+        width: 100vw !important; 
         max-width: 100% !important;
         min-width: 100% !important;
         border-left: none;
         border-right: none;
-        border-radius: 0; /* Estilo em fita fluida nativa para dispositivos móveis */
+        border-radius: 0; 
         box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         z-index: 98;
     }
 
-    /* Se o usuário abrir a caixa expansível de busca, empurra o player para baixo dela dinamicamente */
     .main-wrapper:has(.mobile-search-container:not(.hidden)) .floating-player {
         top: 102px !important; 
     }
