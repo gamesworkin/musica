@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MediaHub by Di Workin'</title>
+    <!-- Linha do Favicon adicionada ao Head -->
     <link rel="icon" type="image/x-icon" href="fav.ico">
     <link rel="stylesheet" href="style.css">
     <!-- FontAwesome para os Ícones do Sistema -->
@@ -17,16 +18,17 @@
     <div id="login-screen" class="login-container">
         <div class="login-box">
             <div class="login-logo-wrapper">
-                <h1 style="color: #fff; font-size: 2rem;"><i class="fas fa-hub"></i> Media<span style="color: var(--theme-color, #3498db)">Hub</span></h1>
+                <!-- Restabelecida a logo 128x128 linkada para o logo1.png do GitHub -->
+                <img src="logo1.png" width="128" height="128" alt="Logo StreamHub" class="login-logo-img">
             </div>
             <h2>Acesso Restrito</h2>
             <form id="form-login">
                 <div class="input-group">
-                    <label for="login-user">ID do Utilizador</label>
+                    <label for="login-user">Usuário</label>
                     <input type="text" id="login-user" placeholder="Ex: admin" required autocomplete="username">
                 </div>
                 <div class="input-group">
-                    <label for="login-pass">Palavra-passe</label>
+                    <label for="login-pass">Senha</label>
                     <input type="password" id="login-pass" placeholder="••••••••" required autocomplete="current-password">
                 </div>
                 <button type="submit" id="btn-login" class="btn-primary">Entrar no Painel</button>
@@ -106,11 +108,8 @@
                 <button id="btn-close-player" class="btn-icon-close" title="Fechar Player"><i class="fas fa-times-circle"></i></button>
             </div>
             <div class="player-content">
-                <!-- Div nativa para a API do YouTube Iframe -->
                 <div id="yt-player" class="hidden"></div>
-                <!-- Iframe universal para Archive.org e embeds variados -->
                 <iframe id="universal-player" class="hidden" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-                <!-- Tag de vídeo nativa para links diretos .mp4/.mkv -->
                 <video id="raw-player" class="hidden" controls autoplay playsinline></video>
             </div>
         </div>
@@ -127,7 +126,6 @@
                 <button id="btn-close-admin" class="btn-close">&times;</button>
             </div>
             
-            <!-- Navegação por Abas -->
             <nav class="tab-nav">
                 <button id="tab-trigger-add" class="tab-btn active"><i class="fas fa-plus-circle"></i> Cadastrar Mídias</button>
                 <button id="tab-trigger-channel" class="tab-btn"><i class="fas fa-tv"></i> Vincular Canal</button>
@@ -189,10 +187,9 @@
                     <button id="btn-save-channel-link" class="btn-success-block">Confirmar Vínculo Dinâmico</button>
                 </div>
 
-                <!-- ABA 3: GERENCIADOR COMPLETO (CRUD SANFONA + BACKUPS) -->
+                <!-- ABA 3: GERENCIADOR COMPLETO -->
                 <div id="manage-tab" class="tab-content hidden" style="height: calc(100% - 10px);">
                     <div class="split-manage-layout">
-                        <!-- Árvore estrutural interativa à esquerda -->
                         <div class="tree-panel-crud">
                             <h3 style="margin-bottom:10px; font-size:1rem; color:var(--theme-color);">Estrutura Interna de Pastas</h3>
                             <div id="crud-tree-list">
@@ -200,7 +197,6 @@
                             </div>
                         </div>
                         
-                        <!-- Ferramentas JSON à direita -->
                         <div class="json-tools-panel">
                             <button id="btn-export-all-json" class="btn-primary btn-export" style="width:100%; padding:12px;"><i class="fas fa-file-export"></i> Baixar Backup Geral (.json)</button>
                             
@@ -237,9 +233,7 @@
         </div>
     </div>
 
-    <!-- ==========================================
-         MODAL EXCLUSIVO PARA EDIÇÃO AVANÇADA DA MÍDIA
-         ========================================== -->
+    <!-- MODAL DE EDIÇÃO AVANÇADA -->
     <div id="edit-media-modal" class="modal-overlay hidden">
         <div class="modal-box edit-box">
             <div class="modal-header">
@@ -275,7 +269,6 @@
         </div>
     </div>
 
-    <!-- Scripts de Inicialização Obrigatórios -->
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="app.js"></script>
 </body>
