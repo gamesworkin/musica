@@ -269,15 +269,15 @@ button:active {
 .search-btn-group button { flex: 1; padding: 6px; font-size: 0.8rem; color: #fff; }
 
 /* ==========================================
-   4. PLAYER DESKTOP - LARGURA EM 60%
+   4. PLAYER DESKTOP - ALTERADO PARA 80% DE LARGURA
    ========================================== */
 .floating-player {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%); 
-    width: 60vw; 
-    max-width: 1050px; 
+    width: 80vw; /* AJUSTADO: Agora ocupa 80% da largura da tela do computador */
+    max-width: 1250px; /* AJUSTADO: Trava máxima expandida para ecrãs grandes */
     min-width: 480px; 
     background: var(--bg-card);
     border: 1px solid #29292e;
@@ -301,7 +301,7 @@ button:active {
 .player-content { 
     position: relative;
     width: 100%; 
-    padding-top: 56.25%; 
+    padding-top: 56.25%; /* Preserva rigorosamente o aspeto cinematográfico 16:9 */
     background: #000; 
 }
 
@@ -315,6 +315,7 @@ button:active {
     height: 100% !important;
     border: none;
 }
+
 
 /* ==========================================
    5. MODAIS ADMINISTRATIVOS & GRID DE LAYOUT
