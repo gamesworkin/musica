@@ -84,7 +84,7 @@ function carregarTemaDoUsuarioLogado(usuario) {
 }
 
 // ==========================================
-// 1. AUTENTICAÇÃO COM SESSÃO E ENTER
+// 1. AUTENTICAÇÃO COM SESSÃO E EVENTOS DE LOGIN (FIXED)
 // ==========================================
 function checkSession() {
     const loginData = localStorage.getItem('streamhub_session');
@@ -108,33 +108,63 @@ function configurarEventosLogin() {
     const inputUser = document.getElementById('login-user');
     const inputPass = document.getElementById('login-pass');
     const btnLogin = document.getElementById('btn-login');
+
+    // Remove qualquer vinculação duplicada anterior limpando referências nativas diretas
     if (inputUser) {
-        const cloneUser = inputUser.cloneNode(true); inputUser.parentNode.replaceChild(cloneUser, inputUser);
-        document.getElementById('login-user').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('login-pass').focus(); } });
+        inputUser.onkeydown = null;
+        inputUser.onkeydown = (e) => {
+            if (e.key === 'Enter') { 
+                e.preventDefault(); 
+                if (inputPass) inputPass.focus(); 
+            }
+        };
     }
+
     if (inputPass) {
-        const clonePass = inputPass.cloneNode(true); inputPass.parentNode.replaceChild(clonePass, inputPass);
-        document.getElementById('login-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } });
+        inputPass.onkeydown = null;
+        inputPass.onkeydown = (e) => {
+            if (e.key === 'Enter') { 
+                e.preventDefault(); 
+                handleLogin(); 
+            }
+        };
     }
+
     if (btnLogin) {
-        const cloneBtn = btnLogin.cloneNode(true); btnLogin.parentNode.replaceChild(cloneBtn, btnLogin);
-        document.getElementById('btn-login').addEventListener('click', (e) => { e.preventDefault(); handleLogin(); });
+        btnLogin.onclick = null;
+        btnLogin.onclick = (e) => { 
+            e.preventDefault(); 
+            handleLogin(); 
+        };
     }
 }
 
 function handleLogin() {
-    const inputUser = document.getElementById('login-user').value.trim().toLowerCase();
-    const inputPass = document.getElementById('login-pass').value.trim();
+    const elUser = document.getElementById('login-user');
+    const elPass = document.getElementById('login-pass');
+    if(!elUser || !elPass) return;
+
+    const inputUser = elUser.value.trim().toLowerCase();
+    const inputPass = elPass.value.trim();
+
+    if (!inputUser || !inputPass) {
+        alert("Preencha todos os campos de credenciais!");
+        return;
+    }
+    
     if (USERS_DATABASE[inputUser] && USERS_DATABASE[inputUser].password === inputPass) {
         currentUser = inputUser;
         CONFIG.FIREBASE_URL = USERS_DATABASE[inputUser].firebaseUrl;
         CONFIG.YT_API_KEY = USERS_DATABASE[inputUser].ytApiKey;
+        
         localStorage.setItem('streamhub_session', JSON.stringify({ user: inputUser, timestamp: Date.now() }));
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
         carregarTemaDoUsuarioLogado(currentUser);
         initApp();
-    } else { alert("Usuário ou senha incorretos!"); }
+    } else { 
+        alert("Usuário ou senha incorretos!"); 
+    }
 }
 
 function handleLogoutActions() {
@@ -473,8 +503,6 @@ async function saveAdvancedEditChanges(e) {
         await empurrarBancoIntegralParaServidor();
         alert("Alteração salva com sucesso!");
         document.getElementById('edit-media-modal').classList.add('hidden');
-        
-        // CORREÇÃO: Dispara a atualização reativa em tempo real na tela
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch (err) { alert("Erro: " + err.message); }
@@ -507,10 +535,8 @@ async function saveMediaToDatabase(e) {
             alert("Vídeo único salvo com sucesso!");
         }
         document.getElementById('manual-media-url').value = ""; if (document.getElementById('admin-modal')) document.getElementById('admin-modal').classList.add('hidden');
-        
-        // CORREÇÃO: Renderiza imediatamente os novos cards no mosaico principal em tempo real
         await recarregarDadosDoBanco();
-    } catch (err) { alert("Erro: " + err.message); } finaly { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
+    } catch (err) { alert("Erro: " + err.message); } finally { btnSave.innerText = "Salvar no meu Firebase"; btnSave.disabled = false; }
 }
 
 async function processarInjecaoDeDadosAcumulativa(novosItens) {
@@ -529,8 +555,6 @@ async function processarInjecaoDeDadosAcumulativa(novosItens) {
         database = bancoAtual;
         await empurrarBancoIntegralParaServidor();
         alert(`Importação concluída! O seu banco agora possui um total de ${database.length} mídias.`);
-        
-        // CORREÇÃO: Alimenta e recarrega os mosaicos em lote de forma transparente
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Falha na mesclagem de dados."); }
@@ -552,14 +576,11 @@ async function empurrarBancoIntegralParaServidor() {
     if (!resposta.ok) throw new Error("Erro na gravação remota do banco.");
 }
 
-// ROTINAS DE DELEÇÃO COM RE-INJEÇÃO REATIVA EM TEMPO REAL
 async function deletarMidiaUnica(indexNoBanco) {
     try {
         database.splice(indexNoBanco, 1);
         await empurrarBancoIntegralParaServidor();
         alert("Mídia removida com sucesso!");
-        
-        // CORREÇÃO: Atualiza a sanfona do gerenciador e a grade de cards dinamicamente
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir mídia."); }
@@ -570,8 +591,6 @@ async function deletarSubcategoria(cat, sub) {
         database = database.filter(item => !(item.categoria === cat && item.subcategoria === sub));
         await empurrarBancoIntegralParaServidor();
         alert("Subcategoria removida!");
-        
-        // CORREÇÃO: Atualiza a sanfona do gerenciador e a grade de cards dinamicamente
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir subcategoria."); }
@@ -584,8 +603,6 @@ async function deletarCategoriaCompleta(cat) {
         await fetch(obterUrlCanalIndividual(btoa(unescape(encodeURIComponent(cat))).replace(/=/g, "")), { method: 'DELETE' });
         alert("Categoria removida por completo!");
         currentView = 'categories'; selectedCategory = ''; selectedSubcategory = '';
-        
-        // CORREÇÃO: Atualiza a sanfona do gerenciador e a grade de cards dinamicamente
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro ao excluir categoria."); }
@@ -601,8 +618,6 @@ async function renomearCategoriaCompleta(antiga, nova) {
             await fetch(obterUrlCanalIndividual(newNodeName), { method: "PUT", body: JSON.stringify(canaisDinamicos[oldNodeName]) }); await fetch(obterUrlCanalIndividual(oldNodeName), { method: "DELETE" });
         }
         alert("Categoria renomeada!");
-        
-        // CORREÇÃO: Sincronização reativa instantânea
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro."); }
@@ -613,8 +628,6 @@ async function renomearSubcategoriaCompleta(cat, antigaSub, novaSub) {
         database.forEach(item => { if(item.categoria === cat && item.subcategoria === antigaSub) item.subcategoria = novaSub; });
         await empurrarBancoIntegralParaServidor();
         alert("Subcategoria renomeada!");
-        
-        // CORREÇÃO: Sincronização reativa instantânea
         await recarregarDadosDoBanco(); 
         renderCrudManager();
     } catch(e) { alert("Erro."); }
@@ -731,4 +744,5 @@ function setupEventListeners() {
     configurarEventosBuscaCanal(); inicializarSeletorCoresLinear();
 }
 
+// Inicialização imediata com os listeners corrigidos
 configurarEventosLogin(); checkSession();
