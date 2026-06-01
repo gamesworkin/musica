@@ -1,9 +1,9 @@
 /* ==========================================
-   VARIÁVEIS DINÂMICAS DO TEMA
+   VARIÁVEIS DINÂMICAS DO TEMA (PADRÃO: VERMELHO)
    ========================================== */
 :root {
-    --theme-color: #3498db; 
-    --theme-color-hover: #2980b9;
+    --theme-color: #e74c3c;        /* AJUSTADO: Vermelho vibrante padrão */
+    --theme-color-hover: #c0392b;  /* AJUSTADO: Vermelho escuro para o hover */
     --bg-main: #121214;
     --bg-card: #202024;
     --bg-sidebar: #1e1e24;
@@ -269,15 +269,15 @@ button:active {
 .search-btn-group button { flex: 1; padding: 6px; font-size: 0.8rem; color: #fff; }
 
 /* ==========================================
-   4. PLAYER DESKTOP - ALTERADO PARA 80% DE LARGURA
+   4. PLAYER DESKTOP - PRESERVADO EM 80%
    ========================================== */
 .floating-player {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%); 
-    width: 80vw; /* AJUSTADO: Agora ocupa 80% da largura da tela do computador */
-    max-width: 1250px; /* AJUSTADO: Trava máxima expandida para ecrãs grandes */
+    width: 80vw; 
+    max-width: 1250px; 
     min-width: 480px; 
     background: var(--bg-card);
     border: 1px solid #29292e;
@@ -301,7 +301,7 @@ button:active {
 .player-content { 
     position: relative;
     width: 100%; 
-    padding-top: 56.25%; /* Preserva rigorosamente o aspeto cinematográfico 16:9 */
+    padding-top: 56.25%; 
     background: #000; 
 }
 
@@ -315,7 +315,6 @@ button:active {
     height: 100% !important;
     border: none;
 }
-
 
 /* ==========================================
    5. MODAIS ADMINISTRATIVOS & GRID DE LAYOUT
@@ -363,7 +362,6 @@ button:active {
 .btn-success-block { width: 100%; padding: 14px; background: #2ecc71; color: #fff; font-size: 1rem; }
 .btn-success-block:hover { background: #27ae60; }
 
-/* REVISÃO GRID: Layout Flexível para evitar quebras */
 .split-manage-layout { display: flex; gap: 20px; height: auto; min-height: 100%; }
 .tree-panel-crud { flex: 1.2; border-right: 1px solid #29292e; padding-right: 15px; }
 .json-tools-panel { flex: 0.8; display: flex; flex-direction: column; gap: 15px; }
@@ -421,12 +419,11 @@ button:active {
     .sidebar-panel { position: fixed; top: 60px; left: 0; height: calc(100vh - 60px); z-index: 90; transform: translateX(-100%); }
     .sidebar-panel.open { transform: translateX(0); width: 260px; }
     
-    /* SOLUÇÃO MOBILE: Empilhamento vertical limpo para o menu gerencial */
+    /* Empilhamento vertical limpo para o menu gerencial */
     .split-manage-layout { flex-direction: column !important; overflow-y: auto !important; gap: 25px !important; }
     .tree-panel-crud { border-right: none !important; padding-right: 0 !important; width: 100% !important; border-bottom: 1px solid #29292e; padding-bottom: 20px; }
     .json-tools-panel { width: 100% !important; margin-top: 10px; }
     
-    /* Evita que títulos longos espremam os botões no telemóvel */
     .crud-item span { max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     .floating-player { 
